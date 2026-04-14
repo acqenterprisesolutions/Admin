@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 180 10% 4%;
+    --foreground: 0 0% 96%;
+
+    --card: 180 8% 8%;
+    --card-foreground: 0 0% 96%;
+
+    --popover: 180 8% 8%;
+    --popover-foreground: 0 0% 96%;
+
+    --primary: 170 55% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 8% 12%;
+    --secondary-foreground: 0 0% 96%;
+
+    --muted: 180 6% 15%;
+    --muted-foreground: 180 5% 55%;
+
+    --accent: 170 55% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 180 8% 18%;
+    --input: 180 8% 18%;
+    --ring: 170 55% 42%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 180 8% 6%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 170 55% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 8% 12%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 180 8% 18%;
+    --sidebar-ring: 170 55% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+@layer utilities {
+  .text-gradient-teal {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(170, 60%, 50%), hsl(160, 70%, 40%));
+  }
+
+  .glow-teal {
+    box-shadow: 0 0 40px hsl(170, 55%, 42% / 0.3), 0 0 80px hsl(170, 55%, 42% / 0.1);
+  }
+
+  .border-glow {
+    border-color: hsl(170, 55%, 42% / 0.3);
+  }
+
+  .bg-gradient-dark {
+    background: linear-gradient(180deg, hsl(180, 10%, 4%) 0%, hsl(180, 8%, 8%) 100%);
+  }
+
+  .bg-gradient-section {
+    background: linear-gradient(180deg, hsl(180, 8%, 6%) 0%, hsl(180, 10%, 3%) 100%);
+  }
+}
