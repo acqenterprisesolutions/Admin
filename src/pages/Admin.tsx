@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LogOut, Plus, Eye, Trash2, Copy, Check, RefreshCw,
-  FileText, Clock, TrendingUp, AlertCircle, X, Shuffle, Loader2
+  FileText, Clock, TrendingUp, AlertCircle, X, Shuffle, Loader2,
+  Sun, Moon, Mail, Building2, User, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,19 @@ import { supabase } from "@/lib/supabase";
 import logo from "@/assets/logo.png";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "ACQ2026";
+type AdminUser = { name: string; token: string; role: "master" | "user" };
+
+function getAdminUsers(): AdminUser[] {
+  try {
+    const raw = import.meta.env.VITE_ADMIN_USERS;
+    if (!raw) return [];
+    return JSON.parse(raw) as AdminUser[];
+  } catch {
+    return [];
+  }
+}
+
+const ADMIN_USERS = getAdminUsers();
 const AUTH_KEY = "acq_admin_auth";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -26,6 +39,11 @@ interface Proposal {
   views_count: number;
   inserted_at: string;
   expires_at: string;
+  created_by: string;
+  client_email: string | null;
+  client_company: string | null;
+  client_owner: string | null;
+  client_website: string | null;
 }
 
 type NewProposalForm = {
@@ -33,6 +51,10 @@ type NewProposalForm = {
   access_code: string;
   html_content: string;
   expires_days: number;
+  client_email: string;
+  client_company: string;
+  client_owner: string;
+  client_website: string;
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -78,6 +100,7 @@ function getDaysLeft(iso: string): { text: string; urgent: boolean } {
 export default function Admin() {
   // Auth
   const [authenticated, setAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState(false);
@@ -86,6 +109,9 @@ export default function Admin() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<StatusFilter>("all");
+
+  // Theme
+  const [darkMode, setDarkMode] = useState(true);
 
   // Create Modal
   const [showModal, setShowModal] = useState(false);
@@ -96,24 +122,55 @@ export default function Admin() {
     access_code: generateCode(),
     html_content: "",
     expires_days: 8,
+    client_email: "",
+    client_company: "",
+    client_owner: "",
+    client_website: "",
   });
 
   // Row actions
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [deletingId, setDeletingId]   = useState<string | null>(null);
-  const [updatingId, setUpdatingId]   = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem("acq_admin_theme");
+    const isDark = saved ? saved === "dark" : true;
+    setDarkMode(isDark);
+    document.documentElement.classList.toggle("dark", isDark);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("acq_admin_theme", next ? "dark" : "light");
+  };
 
   // ── Auth ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (localStorage.getItem(AUTH_KEY) === ADMIN_TOKEN) setAuthenticated(true);
+    const savedToken = localStorage.getItem(AUTH_KEY);
+    if (savedToken) {
+      const user = ADMIN_USERS.find(u => u.token === savedToken);
+      if (user) {
+        setAuthenticated(true);
+        setCurrentUser(user);
+      } else {
+        // Token revogado — limpar
+        localStorage.removeItem(AUTH_KEY);
+      }
+    }
     setAuthReady(true);
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_TOKEN) {
-      localStorage.setItem(AUTH_KEY, ADMIN_TOKEN);
+    const user = ADMIN_USERS.find(u => u.token === password);
+    if (user) {
+      localStorage.setItem(AUTH_KEY, user.token);
       setAuthenticated(true);
+      setCurrentUser(user);
       setAuthError(false);
     } else {
       setAuthError(true);
@@ -123,26 +180,37 @@ export default function Admin() {
   const handleLogout = () => {
     localStorage.removeItem(AUTH_KEY);
     setAuthenticated(false);
+    setCurrentUser(null);
   };
 
   // ── Data ─────────────────────────────────────────────────────────────────
   const fetchProposals = useCallback(async () => {
+    if (!currentUser) return;
     setLoading(true);
-    const { data } = await supabase
+
+    let query = supabase
       .from("proposals")
       .select("*")
       .order("inserted_at", { ascending: false });
+
+    // Users only see their own proposals
+    if (currentUser.role === "user") {
+      query = query.eq("created_by", currentUser.name);
+    }
+
+    const { data } = await query;
     if (data) setProposals(data as Proposal[]);
     setLoading(false);
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
-    if (authenticated) fetchProposals();
-  }, [authenticated, fetchProposals]);
+    if (authenticated && currentUser) fetchProposals();
+  }, [authenticated, currentUser, fetchProposals]);
 
   // ── Create ───────────────────────────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
     setCreating(true);
     setCreateError(null);
 
@@ -150,10 +218,15 @@ export default function Admin() {
     expires_at.setDate(expires_at.getDate() + form.expires_days);
 
     const { error } = await supabase.from("proposals").insert({
-      client_name:  form.client_name,
-      access_code:  form.access_code.toUpperCase(),
-      html_content: form.html_content,
-      expires_at:   expires_at.toISOString(),
+      client_name:    form.client_name,
+      access_code:    form.access_code.toUpperCase(),
+      html_content:   form.html_content,
+      expires_at:     expires_at.toISOString(),
+      created_by:     currentUser.name,
+      client_email:   form.client_email || null,
+      client_company: form.client_company || null,
+      client_owner:   form.client_owner || null,
+      client_website: form.client_website || null,
     });
 
     if (error) {
@@ -167,7 +240,10 @@ export default function Admin() {
     }
 
     setShowModal(false);
-    setForm({ client_name: "", access_code: generateCode(), html_content: "", expires_days: 8 });
+    setForm({
+      client_name: "", access_code: generateCode(), html_content: "", expires_days: 8,
+      client_email: "", client_company: "", client_owner: "", client_website: "",
+    });
     fetchProposals();
     setCreating(false);
   };
@@ -200,6 +276,7 @@ export default function Admin() {
 
   // ── Computed ─────────────────────────────────────────────────────────────
   const filtered = proposals.filter(p => filter === "all" || p.status === filter);
+  const isMaster = currentUser?.role === "master";
   const stats = {
     total:    proposals.length,
     approved: proposals.filter(p => p.status === "approved").length,
@@ -207,7 +284,7 @@ export default function Admin() {
     revision: proposals.filter(p => p.status === "revision_requested").length,
   };
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (!authReady) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -237,7 +314,7 @@ export default function Admin() {
             <div className="text-center mb-8">
               <p className="text-xs tracking-[4px] text-muted-foreground uppercase mb-2">Admin Panel</p>
               <h1 className="font-heading text-2xl font-bold text-foreground">Área Restrita</h1>
-              <p className="text-sm text-muted-foreground mt-2">Insira a senha de administrador para acessar o painel.</p>
+              <p className="text-sm text-muted-foreground mt-2">Insira sua senha pessoal para acessar o painel.</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
@@ -274,23 +351,59 @@ export default function Admin() {
             <img src={logo} alt="ACQ" className="h-8 w-auto" />
             <div className="h-6 w-px bg-border hidden sm:block" />
             <div className="hidden sm:block">
-              <p className="text-sm font-heading font-bold text-foreground">Proposals Admin</p>
-              <p className="text-xs text-muted-foreground">{proposals.length} proposta{proposals.length !== 1 ? "s" : ""} no total</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-heading font-bold text-foreground">Proposals Admin</p>
+                {currentUser && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                    isMaster
+                      ? "bg-[#00FF9D]/15 text-[#00FF9D]"
+                      : "bg-indigo-500/15 text-indigo-400"
+                  }`}>
+                    {isMaster ? "Master" : "User"}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Logado como <span className="text-foreground font-medium">{currentUser?.name}</span>
+                {" · "}
+                {proposals.length} proposta{proposals.length !== 1 ? "s" : ""}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Theme Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="text-muted-foreground hover:text-primary"
+              title={darkMode ? "Modo claro" : "Modo escuro"}
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={darkMode ? "moon" : "sun"}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </motion.div>
+              </AnimatePresence>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={fetchProposals}
               className="text-muted-foreground hover:text-primary"
+              title="Atualizar"
             >
               <RefreshCw className="w-4 h-4" />
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="text-xs border-border"
+              className="text-xs border-border hidden sm:flex"
               onClick={() => window.open("/portal", "_blank")}
             >
               Ver Portal ↗
@@ -311,10 +424,10 @@ export default function Admin() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total",      value: stats.total,    color: "text-foreground",        icon: FileText     },
-            { label: "Aprovadas",  value: stats.approved, color: "text-[#00FF9D]",         icon: Check        },
-            { label: "Pendentes",  value: stats.pending,  color: "text-yellow-400",        icon: Clock        },
-            { label: "Em Revisão", value: stats.revision, color: "text-indigo-400",        icon: TrendingUp   },
+            { label: "Total",      value: stats.total,    color: "text-foreground", icon: FileText },
+            { label: "Aprovadas",  value: stats.approved, color: "text-[#00FF9D]",  icon: Check },
+            { label: "Pendentes",  value: stats.pending,  color: "text-yellow-400", icon: Clock },
+            { label: "Em Revisão", value: stats.revision, color: "text-indigo-400", icon: TrendingUp },
           ].map(s => (
             <div key={s.label} className="bg-card/40 backdrop-blur-sm border border-border rounded-xl p-4 flex items-center gap-4">
               <div className="p-2 rounded-lg bg-primary/10">
@@ -380,15 +493,20 @@ export default function Admin() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {["Cliente", "Código", "Status", "Views", "Criada", "Validade", "Ações"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {h}
-                      </th>
-                    ))}
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cliente</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">E-mail</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Empresa</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Código</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Views</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Criada</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Validade</th>
+                    {isMaster && <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Autor</th>}
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p, i) => {
+                  {filtered.map(p => {
                     const { text: daysLeft, urgent } = getDaysLeft(p.expires_at);
                     const meta = STATUS_META[p.status];
                     return (
@@ -397,6 +515,23 @@ export default function Admin() {
                         className={`border-b border-border/50 hover:bg-primary/5 transition-colors ${p.status === "expired" ? "opacity-50" : ""}`}
                       >
                         <td className="px-4 py-3 font-semibold text-foreground">{p.client_name}</td>
+                        <td className="px-4 py-3">
+                          {p.client_email ? (
+                            <a
+                              href={`mailto:${p.client_email}`}
+                              className="text-primary hover:underline text-xs flex items-center gap-1"
+                              title={p.client_email}
+                            >
+                              <Mail className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate max-w-[140px]">{p.client_email}</span>
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {p.client_company || "—"}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <code className="bg-secondary/60 text-primary px-2 py-1 rounded font-mono text-xs tracking-widest">
@@ -432,10 +567,17 @@ export default function Admin() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">{formatDate(p.inserted_at)}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs font-${urgent ? "bold" : "normal"}`} style={{ color: urgent ? "#f59e0b" : "var(--muted-foreground)" }}>
+                          <span className={`text-xs ${urgent ? "font-bold" : "font-normal"}`} style={{ color: urgent ? "#f59e0b" : undefined }}>
                             {daysLeft}
                           </span>
                         </td>
+                        {isMaster && (
+                          <td className="px-4 py-3">
+                            <span className="text-xs bg-secondary/60 text-foreground px-2 py-1 rounded-full">
+                              {p.created_by || "Admin"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <button
@@ -495,78 +637,150 @@ export default function Admin() {
               </div>
 
               <form onSubmit={handleCreate} className="p-6 space-y-5">
-                {/* Client Name */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Nome do Cliente *</label>
-                  <Input
-                    type="text"
-                    placeholder="Ex: João Silva"
-                    value={form.client_name}
-                    onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
-                    required
-                    autoFocus
-                    className="h-11 bg-secondary/50 border-border"
-                  />
-                </div>
+                {/* ── Section: Client Data ── */}
+                <div className="space-y-4 pb-4 border-b border-border/50">
+                  <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-primary" /> Dados do Cliente
+                  </h3>
 
-                {/* Access Code */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Código de Acesso *</label>
-                  <div className="flex gap-2">
+                  {/* Email — required */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-muted-foreground" /> E-mail *
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="contato@empresa.com"
+                      value={form.client_email}
+                      onChange={e => setForm(f => ({ ...f, client_email: e.target.value }))}
+                      required
+                      autoFocus
+                      className="h-11 bg-secondary/50 border-border"
+                    />
+                  </div>
+
+                  {/* Company — optional */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-muted-foreground" /> Nome da empresa
+                    </label>
                     <Input
                       type="text"
-                      value={form.access_code}
-                      onChange={e => setForm(f => ({ ...f, access_code: e.target.value.toUpperCase() }))}
-                      maxLength={10}
-                      required
-                      className="h-11 bg-secondary/50 border-border text-primary font-mono tracking-widest text-center text-lg flex-1"
+                      placeholder="Ex: Acme Ltda"
+                      value={form.client_company}
+                      onChange={e => setForm(f => ({ ...f, client_company: e.target.value }))}
+                      className="h-11 bg-secondary/50 border-border"
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setForm(f => ({ ...f, access_code: generateCode() }))}
-                      className="h-11 gap-2 border-border"
-                    >
-                      <Shuffle className="w-4 h-4" /> Gerar
-                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Será enviado ao cliente para acessar a proposta.</p>
+
+                  {/* Owner — optional */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-muted-foreground" /> Proprietário / Responsável
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Ex: João Silva"
+                      value={form.client_owner}
+                      onChange={e => setForm(f => ({ ...f, client_owner: e.target.value }))}
+                      className="h-11 bg-secondary/50 border-border"
+                    />
+                  </div>
+
+                  {/* Website — optional */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-muted-foreground" /> Site
+                    </label>
+                    <Input
+                      type="url"
+                      placeholder="https://empresa.com"
+                      value={form.client_website}
+                      onChange={e => setForm(f => ({ ...f, client_website: e.target.value }))}
+                      className="h-11 bg-secondary/50 border-border"
+                    />
+                  </div>
                 </div>
 
-                {/* Expiry */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Prazo de acesso *</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {[3, 5, 8, 14, 30].map(d => (
-                      <button
-                        key={d}
+                {/* ── Section: Proposal Details ── */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" /> Detalhes da Proposta
+                  </h3>
+
+                  {/* Client Name */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Nome de exibição na proposta *</label>
+                    <Input
+                      type="text"
+                      placeholder="Ex: João Silva — Acme Corp"
+                      value={form.client_name}
+                      onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
+                      required
+                      className="h-11 bg-secondary/50 border-border"
+                    />
+                    <p className="text-xs text-muted-foreground">Este nome aparecerá na página da proposta vista pelo cliente.</p>
+                  </div>
+
+                  {/* Access Code */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Código de Acesso *</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={form.access_code}
+                        onChange={e => setForm(f => ({ ...f, access_code: e.target.value.toUpperCase() }))}
+                        maxLength={10}
+                        required
+                        className="h-11 bg-secondary/50 border-border text-primary font-mono tracking-widest text-center text-lg flex-1"
+                      />
+                      <Button
                         type="button"
-                        onClick={() => setForm(f => ({ ...f, expires_days: d }))}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-                          form.expires_days === d
-                            ? "bg-primary/20 border-primary text-primary"
-                            : "bg-transparent border-border text-muted-foreground hover:border-primary/50"
-                        }`}
+                        variant="outline"
+                        onClick={() => setForm(f => ({ ...f, access_code: generateCode() }))}
+                        className="h-11 gap-2 border-border"
                       >
-                        {d}d
-                      </button>
-                    ))}
+                        <Shuffle className="w-4 h-4" /> Gerar
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Será enviado ao cliente para acessar a proposta.</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">Expira em {form.expires_days} dias a partir de agora.</p>
-                </div>
 
-                {/* HTML Content */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">HTML completo da proposta *</label>
-                  <textarea
-                    placeholder={"<!DOCTYPE html>\n<html>\n  <head>...</head>\n  <body>...</body>\n</html>"}
-                    value={form.html_content}
-                    onChange={e => setForm(f => ({ ...f, html_content: e.target.value }))}
-                    required
-                    rows={8}
-                    className="w-full bg-secondary/50 border border-border rounded-lg p-3 text-sm text-foreground font-mono resize-y outline-none focus:border-primary/50 transition-colors"
-                  />
-                  <p className="text-xs text-muted-foreground">Cole o HTML completo da landing page. Será renderizado no iframe do cliente.</p>
+                  {/* Expiry */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Prazo de acesso *</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[3, 5, 8, 14, 30].map(d => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, expires_days: d }))}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
+                            form.expires_days === d
+                              ? "bg-primary/20 border-primary text-primary"
+                              : "bg-transparent border-border text-muted-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Expira em {form.expires_days} dias a partir de agora.</p>
+                  </div>
+
+                  {/* HTML Content */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">HTML completo da proposta *</label>
+                    <textarea
+                      placeholder={"<!DOCTYPE html>\n<html>\n  <head>...</head>\n  <body>...</body>\n</html>"}
+                      value={form.html_content}
+                      onChange={e => setForm(f => ({ ...f, html_content: e.target.value }))}
+                      required
+                      rows={8}
+                      className="w-full bg-secondary/50 border border-border rounded-lg p-3 text-sm text-foreground font-mono resize-y outline-none focus:border-primary/50 transition-colors"
+                    />
+                    <p className="text-xs text-muted-foreground">Cole o HTML completo da landing page. Será renderizado no iframe do cliente.</p>
+                  </div>
                 </div>
 
                 {createError && (
