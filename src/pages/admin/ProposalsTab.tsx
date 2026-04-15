@@ -125,6 +125,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [form, setForm] = useState<NewProposalForm>({
     client_name: "", access_code: generateCode(), html_content: "",
     expires_days: 8, client_email: "", client_company: "",
     client_owner: "", client_website: "", proposal_value: "",
