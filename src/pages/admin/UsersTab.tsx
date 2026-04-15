@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Shield, ShieldOff, Loader2, AlertCircle, X, Shuffle, Users } from "lucide-react";
+import { Plus, Trash2, Shield, ShieldOff, Loader2, AlertCircle, X, Shuffle, Users, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
@@ -29,8 +29,14 @@ export default function UsersTab() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<DbUser | null>(null);
 
-  const [form, setForm] = useState({ name: "", token: generateToken(), role: "user" as "master" | "user", commission_rate: "50" });
+  const [form, setForm] = useState({ 
+    name: "", 
+    token: generateToken(), 
+    role: "user" as "master" | "user", 
+    commission_rate: "50" 
+  });
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -41,25 +47,45 @@ export default function UsersTab() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleOpenEdit = (u: DbUser) => {
+    setEditingUser(u);
+    setForm({
+      name: u.name,
+      token: u.token,
+      role: u.role,
+      commission_rate: u.commission_rate.toString()
+    });
+    setCreateError(null);
+    setShowModal(true);
+  };
+
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
 
-    const { error } = await supabase.from("admin_users").insert({
+    const payload = {
       name: form.name,
       token: form.token,
       role: form.role,
       commission_rate: parseFloat(form.commission_rate) || 50,
-    });
+    };
 
-    if (error) {
-      setCreateError(error.code === "23505" ? "Token/senha já existe. Gere outro." : error.message);
+    let result;
+    if (editingUser) {
+      result = await supabase.from("admin_users").update(payload).eq("id", editingUser.id);
+    } else {
+      result = await supabase.from("admin_users").insert(payload);
+    }
+
+    if (result.error) {
+      setCreateError(result.error.code === "23505" ? "Token/senha já existe. Gere outro." : result.error.message);
       setCreating(false);
       return;
     }
 
     setShowModal(false);
+    setEditingUser(null);
     setForm({ name: "", token: generateToken(), role: "user", commission_rate: "50" });
     fetchUsers();
     setCreating(false);
@@ -87,7 +113,12 @@ export default function UsersTab() {
           <h2 className="font-heading text-xl font-bold text-foreground">Gerenciar Usuários</h2>
           <p className="text-sm text-muted-foreground">{users.length} usuário{users.length !== 1 ? "s" : ""} cadastrado{users.length !== 1 ? "s" : ""}</p>
         </div>
-        <Button onClick={() => { setShowModal(true); setCreateError(null); }} className="bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C] gap-2">
+        <Button onClick={() => { 
+          setEditingUser(null);
+          setForm({ name: "", token: generateToken(), role: "user", commission_rate: "50" });
+          setShowModal(true); 
+          setCreateError(null); 
+        }} className="bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C] gap-2">
           <Plus className="w-4 h-4" /> Novo Usuário
         </Button>
       </div>
@@ -99,7 +130,10 @@ export default function UsersTab() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Users className="w-12 h-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">Nenhum usuário cadastrado.</p>
-            <Button onClick={() => setShowModal(true)} className="bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C] gap-2"><Plus className="w-4 h-4" /> Criar Primeiro</Button>
+            <Button onClick={() => {
+              setEditingUser(null);
+              setShowModal(true);
+            }} className="bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C] gap-2"><Plus className="w-4 h-4" /> Criar Primeiro</Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -134,6 +168,10 @@ export default function UsersTab() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
+                        <button onClick={() => handleOpenEdit(u)} title="Editar"
+                          className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleToggle(u)} disabled={togglingId === u.id} title={u.is_active ? "Bloquear" : "Desbloquear"}
                           className="p-1.5 rounded-lg hover:bg-yellow-500/10 text-muted-foreground hover:text-yellow-400 transition-colors">
                           {togglingId === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : u.is_active ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
@@ -154,15 +192,17 @@ export default function UsersTab() {
         )}
       </div>
 
-      {/* Create Modal */}
+      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div className="bg-card border border-border rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b border-border">
-              <h2 className="font-heading text-xl font-bold text-foreground">Novo Usuário</h2>
+              <h2 className="font-heading text-xl font-bold text-foreground">
+                {editingUser ? "Editar Usuário" : "Novo Usuário"}
+              </h2>
               <button onClick={() => setShowModal(false)} className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
+            <form onSubmit={handleCreateOrUpdate} className="p-6 space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-foreground">Nome *</label>
                 <Input type="text" placeholder="Ex: João Silva" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required autoFocus className="h-11 bg-secondary/50 border-border" />
@@ -191,7 +231,7 @@ export default function UsersTab() {
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="flex-1">Cancelar</Button>
                 <Button type="submit" disabled={creating} className="flex-1 bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C]">
-                  {creating ? <Loader2 className="animate-spin w-4 h-4" /> : "Criar Usuário"}
+                  {creating ? <Loader2 className="animate-spin w-4 h-4" /> : editingUser ? "Salvar Alterações" : "Criar Usuário"}
                 </Button>
               </div>
             </form>
