@@ -155,7 +155,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
 
     const { data } = await query;
     if (data) {
-      setProposals(data as Proposal[]);
+      let userProposals = data as unknown as Proposal[];
+      if (currentUser.role !== "master") {
+        userProposals = userProposals.filter(p => (p as unknown as { created_by: string }).created_by === currentUser.name);
+      }
+      setProposals(userProposals);
       // Extract unique users for filter dropdown
       const users = [...new Set((data as Proposal[]).map(p => p.created_by).filter(Boolean))];
       setAllUsers(users);

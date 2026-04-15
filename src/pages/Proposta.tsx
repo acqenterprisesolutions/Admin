@@ -11,7 +11,7 @@ const Proposta = () => {
   const code = searchParams.get("code");
   const navigate = useNavigate();
 
-  const [proposal, setProposal] = useState<any>(null);
+  const [proposal, setProposal] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState(0);
 

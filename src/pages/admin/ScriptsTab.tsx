@@ -65,9 +65,9 @@ export default function ScriptsTab({ currentUser }: { currentUser: { name: strin
     ]);
 
     if (pRes.data) {
-      let userProposals = pRes.data as Proposal[];
+      let userProposals = pRes.data as unknown as Proposal[];
       if (currentUser.role !== "master") {
-        userProposals = userProposals.filter(p => (p as any).created_by === currentUser.name);
+        userProposals = userProposals.filter(p => (p as unknown as { created_by: string }).created_by === currentUser.name);
       }
       setProposals(userProposals);
     }
