@@ -9,6 +9,7 @@ import heroBg from "@/assets/hero-bg.jpg";
 import { supabase } from "@/lib/supabase";
 
 import Navbar from "@/components/Navbar";
+import MarqueeBanner from "@/components/MarqueeBanner";
 
 const Portal = () => {
   const [code, setCode] = useState("");
@@ -42,9 +43,16 @@ const Portal = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Navbar always at top */}
       <Navbar />
-      <div className="flex items-center justify-center px-4 pt-32 pb-20 min-h-screen relative z-10">
-        {/* Background image inside the flex container to cover correctly */}
+      
+      {/* Service Bar under Navbar */}
+      <div className="pt-16">
+        <MarqueeBanner />
+      </div>
+
+      <div className="relative flex items-center justify-center px-4 pt-12 pb-20 min-h-[calc(100vh-64px)] z-10">
+        {/* Background image covering the content area */}
         <div className="absolute inset-0 -z-10">
           <img src={heroBg} alt="" className="w-full h-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
