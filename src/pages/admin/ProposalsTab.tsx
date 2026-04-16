@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Eye, Trash2, Copy, Check, FileText, Clock, TrendingUp,
-  AlertCircle, X, Shuffle, Loader2, Mail, Building2, User, Globe, Filter
+  AlertCircle, X, Shuffle, Loader2, Mail, Building2, User, Globe, Filter,
+  Palette, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
