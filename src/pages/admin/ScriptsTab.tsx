@@ -180,8 +180,8 @@ export default function ScriptsTab({ currentUser }: { currentUser: { name: strin
           <p className="text-muted-foreground font-medium">Selecione uma proposta acima para ver os scripts.</p>
         </div>
       ) : (
+        <div className="lg:col-span-5 space-y-4">
           {/* Email Templates Section */}
-          <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-primary/10">
@@ -244,7 +244,6 @@ export default function ScriptsTab({ currentUser }: { currentUser: { name: strin
               })}
             </Accordion>
           </div>
-        </div>
       )}
 
       {/* Settings Modal (Base Templates) */}
