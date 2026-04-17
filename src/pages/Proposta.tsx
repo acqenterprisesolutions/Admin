@@ -46,33 +46,82 @@ const Proposta = () => {
       setSecondsLeft(calculateTimeLeft());
       setLoading(false);
 
-      intervalId = setInterval(() => {
-        setSecondsLeft(calculateTimeLeft());
-      }, 1000);
-
-      // Increment view count via an RPC or updating directly. Doing directly:
+      // Increment view count
       await supabase.from("proposals").update({ views_count: (data.views_count || 0) + 1 }).eq("id", data.id);
     };
 
     fetchProposal();
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
   }, [code, navigate]);
 
-  const hours = String(Math.floor(secondsLeft / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((secondsLeft % 3600) / 60)).padStart(2, "0");
-  const seconds = String(secondsLeft % 60).padStart(2, "0");
-  const expired = secondsLeft <= 0;
+  useEffect(() => {
+    if (!proposal?.expires_at) return;
+
+    const end = new Date(proposal.expires_at as string).getTime();
+
+    const updateTimer = () => {
+      const now = new Date().getTime();
+      const distance = end - now;
+
+      if (distance <= 0) {
+        setSecondsLeft(0);
+        return;
+      }
+      setSecondsLeft(Math.floor(distance / 1000));
+    };
+
+    updateTimer(); // Initial call
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [proposal?.expires_at]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="animate-spin text-primary w-10 h-10" />
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-muted-foreground animate-pulse font-heading tracking-wider">Carregando acesso seguro...</p>
       </div>
     );
   }
+
+  if (error || !proposal || secondsLeft <= 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-card border border-border p-8 rounded-2xl max-w-md w-full text-center space-y-6"
+        >
+          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
+            <Lock className="w-8 h-8 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-heading font-bold text-foreground">Acesso Expirado</h2>
+            <p className="text-muted-foreground">
+              O link desta proposta não é mais válido. Por questões de segurança, os acessos são temporários.
+            </p>
+          </div>
+          <Button 
+            className="w-full bg-primary text-black font-bold hover:bg-primary/90"
+            onClick={() => window.location.href = '/'}
+          >
+            Voltar ao Início
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const parseTimeLeft = () => {
+    const d = Math.floor(secondsLeft / 86400);
+    const h = String(Math.floor((secondsLeft % 86400) / 3600)).padStart(2, "0");
+    const m = String(Math.floor((secondsLeft % 3600) / 60)).padStart(2, "0");
+    const s = String(secondsLeft % 60).padStart(2, "0");
+    return { d, h, m, s };
+  };
+
+  const { d: days, h: hours, m: minutes, s: seconds } = parseTimeLeft();
+  const expired = secondsLeft <= 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -111,11 +160,14 @@ const Proposta = () => {
             {/* Timer */}
             <div className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full border ${expired ? "border-destructive/40 bg-destructive/10" : "border-primary/30 bg-primary/5"}`}>
               <Clock className={`w-4 h-4 ${expired ? "text-destructive" : "text-primary"}`} />
-              <div className={`font-heading font-bold text-xs sm:text-sm tracking-wider ${expired ? "text-destructive" : "text-primary"}`}>
+              <div className={`font-heading font-bold text-xs sm:text-sm tracking-wider ${expired ? "text-destructive" : "text-primary"} flex items-center`}>
                 {expired ? (
                   "EXPIRED"
                 ) : (
                   <>
+                    {days > 0 && (
+                      <span className="mr-1.5 opacity-90">{days}d</span>
+                    )}
                     <span>{hours}</span>
                     <span className="animate-pulse mx-0.5">:</span>
                     <span>{minutes}</span>

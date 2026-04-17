@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Eye, Trash2, Copy, Check, FileText, Clock, TrendingUp,
   AlertCircle, X, Shuffle, Loader2, Mail, Building2, User, Globe, Filter,
-  Palette, Zap, Edit3, Sparkles
+  Palette, Zap, Edit3, Sparkles, Search, Settings2, Save
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,9 +92,12 @@ function generateCode(): string {
   return code;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
+const formatDate = (iso: string) => {
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit"
+  }).replace(",", " -");
+};
 
 function getDaysLeft(iso: string): { text: string; urgent: boolean } {
   const diff = new Date(iso).getTime() - Date.now();
@@ -132,6 +135,10 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [showPreview, setShowPreview] = useState(false);
   const [lovablePrompt, setLovablePrompt] = useState("");
   const [promptTemplate, setPromptTemplate] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showPromptConfig, setShowPromptConfig] = useState(false);
+  const [editingBasePrompt, setEditingBasePrompt] = useState("");
+  const [savingBasePrompt, setSavingBasePrompt] = useState(false);
   const [form, setForm] = useState<NewProposalForm>({
     client_name: "", access_code: generateCode(), html_content: "",
     expires_days: 8, client_email: "", client_company: "",
@@ -240,13 +247,22 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   };
 
   // ── Prompt Logic ──────────────────────────────────────────────────────────
+  const fetchTmpl = async () => {
+    const { data } = await supabase.from("email_templates").select("body").eq("key", "lovable_prompt").single();
+    if (data) setPromptTemplate(data.body);
+  };
+
   useEffect(() => {
-    const fetchTmpl = async () => {
-      const { data } = await supabase.from("email_templates").select("body").eq("key", "lovable_prompt").single();
-      if (data) setPromptTemplate(data.body);
-    };
     fetchTmpl();
   }, []);
+
+  const handleSaveBasePrompt = async () => {
+    setSavingBasePrompt(true);
+    await supabase.from("email_templates").update({ body: editingBasePrompt }).eq("key", "lovable_prompt");
+    setPromptTemplate(editingBasePrompt);
+    setShowPromptConfig(false);
+    setSavingBasePrompt(false);
+  };
 
   useEffect(() => {
     if (!promptTemplate) return;
@@ -343,6 +359,14 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     const end = dateTo + "T23:59:59";
     filtered = filtered.filter(p => p.inserted_at <= end);
   }
+  if (searchTerm) {
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(p => 
+      p.client_email?.toLowerCase().includes(term) || 
+      p.access_code?.toLowerCase().includes(term) ||
+      p.client_name?.toLowerCase().includes(term)
+    );
+  }
 
   const negotiating = proposals.filter(p => p.status === "pending" || p.status === "revision_requested").length;
   const completed = proposals.filter(p => p.status === "approved").length;
@@ -391,7 +415,35 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
               </button>
             ))}
           </div>
-          <Button
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <Input
+                type="text"
+                placeholder="Buscar por e-mail, código ou nome..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-9 h-9 bg-secondary/30 border-border text-xs focus:border-primary/50"
+              />
+            </div>
+            
+            {isMaster && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setEditingBasePrompt(promptTemplate); setShowPromptConfig(true); }}
+                className="h-9 border-border bg-card/40 hover:bg-secondary/60 text-xs"
+                title="Configurar Prompt Base"
+              >
+                <Settings2 className="w-4 h-4 mr-1 sm:mr-0 lg:mr-1" />
+                <span className="hidden lg:inline">Configurar Prompt</span>
+              </Button>
+            )}
+
+            <Button
             onClick={() => { 
               setEditingId(null);
               setForm({
@@ -411,6 +463,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
           >
             <Plus className="w-4 h-4" /> Nova Proposta
           </Button>
+          </div>
         </div>
 
         {/* Master Advanced Filters */}
@@ -792,6 +845,46 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showPromptConfig && isMaster && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col h-[85vh]">
+            <div className="flex items-center justify-between p-6 border-b border-border bg-secondary/20">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Settings2 className="w-5 h-5 text-primary" />
+                </div>
+                <h2 className="font-heading text-lg font-bold text-foreground">Configurar Prompt LandingPage Base</h2>
+              </div>
+              <button onClick={() => setShowPromptConfig(false)} className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Este é o esqueleto (template) do prompt que o sistema usa para preencher os dados de todas as propostas geradas pelos usuários. Use as tags para substituição automática: <br/>
+                <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{NOME}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{TIPO}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{CIDADE}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{ESTADO}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{SERVICO_1}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{COR_1}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{COR_2}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{CTA}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{REVIEWS}`}</code>, etc.
+              </p>
+              
+              <textarea
+                value={editingBasePrompt}
+                onChange={e => setEditingBasePrompt(e.target.value)}
+                className="w-full h-full min-h-[400px] bg-secondary/30 border border-border rounded-xl p-4 text-xs font-mono text-foreground outline-none focus:border-primary/50 resize-y"
+              />
+            </div>
+            
+            <div className="p-6 border-t border-border flex justify-end gap-3 bg-secondary/10">
+              <Button type="button" variant="outline" onClick={() => setShowPromptConfig(false)} className="bg-transparent border-border hover:bg-secondary/60">
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveBasePrompt} disabled={savingBasePrompt} className="bg-primary text-black font-bold hover:bg-primary/90">
+                {savingBasePrompt ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Salvar Prompt
+              </Button>
+            </div>
           </div>
         </div>
       )}
