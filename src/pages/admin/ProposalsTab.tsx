@@ -725,7 +725,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                   <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/30">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" /> 4. Prompt Método VNG
+                        <Sparkles className="w-4 h-4" /> 4. Prompt LandingPage
                       </h3>
                       <Button 
                         type="button" 
@@ -744,7 +744,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       value={lovablePrompt}
                       className="w-full bg-primary/5 border border-primary/20 rounded-lg p-3 text-[10px] text-primary font-mono resize-none h-32 leading-relaxed"
                     />
-                    <p className="text-[10px] text-muted-foreground italic">Copie este prompt e cole no Lovable para gerar o código da proposta.</p>
+                    <p className="text-[10px] text-muted-foreground italic">Copie este prompt detalhado para gerar sua Landing Page no Lovable.</p>
                   </div>
 
                   <div className="space-y-2 sm:col-span-2 pt-4 border-t border-border/30">
