@@ -84,7 +84,7 @@ const Proposta = () => {
     );
   }
 
-  if (error || !proposal || secondsLeft <= 0) {
+  if (!proposal || secondsLeft <= 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <motion.div 
