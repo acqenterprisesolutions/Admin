@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Eye, Trash2, Copy, Check, FileText, Clock, TrendingUp,
   AlertCircle, X, Shuffle, Loader2, Mail, Building2, User, Globe, Filter,
-  Palette, Zap
+  Palette, Zap, Edit3, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,10 +122,16 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [dateTo, setDateTo] = useState("");
   const [allUsers, setAllUsers] = useState<string[]>([]);
 
-  // Create Modal
+  // Create/Edit Modal
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  
+  // Preview and Prompt
+  const [showPreview, setShowPreview] = useState(false);
+  const [lovablePrompt, setLovablePrompt] = useState("");
+  const [promptTemplate, setPromptTemplate] = useState("");
   const [form, setForm] = useState<NewProposalForm>({
     client_name: "", access_code: generateCode(), html_content: "",
     expires_days: 8, client_email: "", client_company: "",
@@ -183,7 +189,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
 
     const val = parseFloat(form.proposal_value);
 
-    const { error } = await supabase.from("proposals").insert({
+    const payload = {
       client_name:    form.client_name,
       access_code:    form.access_code.toUpperCase(),
       html_content:   form.html_content,
@@ -205,7 +211,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       cta_action:     form.cta_action || null,
       reviews_summary: form.reviews_summary || null,
       keywords:       form.keywords || null,
-    });
+    };
+
+    const { error } = editingId 
+      ? await supabase.from("proposals").update(payload).eq("id", editingId)
+      : await supabase.from("proposals").insert(payload);
 
     if (error) {
       setCreateError(error.code === "23505" ? "Código já está em uso. Gere um novo." : error.message);
@@ -214,6 +224,8 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     }
 
     setShowModal(false);
+    setEditingId(null);
+    setShowPreview(false);
     setForm({
       client_name: "", access_code: generateCode(), html_content: "", expires_days: 8,
       client_email: "", client_company: "", client_owner: "", client_website: "", proposal_value: "",
@@ -227,6 +239,44 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     setCreating(false);
   };
 
+  // ── Prompt Logic ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchTmpl = async () => {
+      const { data } = await supabase.from("email_templates").select("body").eq("key", "lovable_prompt").single();
+      if (data) setPromptTemplate(data.body);
+    };
+    fetchTmpl();
+  }, []);
+
+  useEffect(() => {
+    if (!promptTemplate) return;
+    
+    const filled = promptTemplate
+      .replaceAll("{TIPO}", form.business_type || "[TIPO]")
+      .replaceAll("{BUSINESS_TYPE}", form.business_type || "[TIPO]")
+      .replaceAll("{NOME}", form.client_company || form.client_name || "[NOME]")
+      .replaceAll("{CLIENT_COMPANY}", form.client_company || form.client_name || "[NOME]")
+      .replaceAll("{CIDADE}", form.city || "[CIDADE]")
+      .replaceAll("{CITY}", form.city || "[CIDADE]")
+      .replaceAll("{ESTADO}", form.state || "[ESTADO]")
+      .replaceAll("{SERVICO_1}", form.service_1 || "[SERVIÇO 1]")
+      .replaceAll("{SERVICO_2}", form.service_2 || "[SERVIÇO 2]")
+      .replaceAll("{SERVICO_3}", form.service_3 || "[SERVIÇO 3]")
+      .replaceAll("{COR_1}", form.primary_color || "[COR PRIMÁRIA]")
+      .replaceAll("{COR_2}", form.secondary_color || "[COR SECUNDÁRIA]")
+      .replaceAll("{CTA}", form.cta_action || "[AÇÃO]")
+      .replaceAll("{REVIEWS}", form.reviews_summary || "[REVIEWS]")
+      .replaceAll("{EMAIL}", form.client_email || "[EMAIL]")
+      .replaceAll("{KEYWORDS}", form.keywords || "[KEYWORDS]")
+      .replaceAll("{CLIENT_OWNER}", form.client_owner || form.client_name || "[NOME]")
+      .replaceAll("{LINK_DEMO}", `${window.location.origin}/proposta?code=${form.access_code}`)
+      .replaceAll("{ACCESS_CODE}", form.access_code)
+      .replaceAll("{PROPOSAL_VALUE}", form.proposal_value || "0,00")
+      .replaceAll("{ADMIN_NAME}", currentUser.name);
+    
+    setLovablePrompt(filled);
+  }, [form, promptTemplate, currentUser.name]);
+
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -235,6 +285,34 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   };
 
   const handlePreview = (p: Proposal) => window.open(`/proposta?code=${p.access_code}`, "_blank");
+
+  const handleEdit = (p: Proposal) => {
+    setEditingId(p.id);
+    setForm({
+      client_name: p.client_name,
+      access_code: p.access_code,
+      html_content: p.html_content || "",
+      expires_days: 8, // Non-critical for edit
+      client_email: p.client_email || "",
+      client_company: p.client_company || "",
+      client_owner: p.client_owner || "",
+      client_website: p.client_website || "",
+      proposal_value: p.proposal_value?.toString() || "",
+      business_type: p.business_type || "",
+      city: p.city || "",
+      state: p.state || "",
+      service_1: p.service_1 || "",
+      service_2: p.service_2 || "",
+      service_3: p.service_3 || "",
+      primary_color: p.primary_color || "#00FF9D",
+      secondary_color: p.secondary_color || "#050505",
+      cta_action: p.cta_action || "Solicitar Orçamento",
+      reviews_summary: p.reviews_summary || "",
+      keywords: p.keywords || "",
+    });
+    setShowModal(true);
+    setCreateError(null);
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir esta proposta permanentemente?")) return;
@@ -314,7 +392,21 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
             ))}
           </div>
           <Button
-            onClick={() => { setShowModal(true); setCreateError(null); }}
+            onClick={() => { 
+              setEditingId(null);
+              setForm({
+                client_name: "", access_code: generateCode(), html_content: "",
+                expires_days: 8, client_email: "", client_company: "",
+                client_owner: "", client_website: "", proposal_value: "",
+                business_type: "", city: "", state: "",
+                service_1: "", service_2: "", service_3: "",
+                primary_color: "#00FF9D", secondary_color: "#050505",
+                cta_action: "Solicitar Orçamento", reviews_summary: "",
+                keywords: "",
+              });
+              setShowModal(true); 
+              setCreateError(null); 
+            }}
             className="bg-[#00FF9D] text-black font-bold hover:bg-[#00E58C] shadow-[0_0_15px_rgba(0,255,157,0.3)] gap-2"
           >
             <Plus className="w-4 h-4" /> Nova Proposta
@@ -445,6 +537,9 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       )}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <button onClick={() => handleEdit(p)} title="Editar" className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
+                            <Edit3 className="w-4 h-4" />
+                          </button>
                           <button onClick={() => handlePreview(p)} title="Visualizar" className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
                             <Eye className="w-4 h-4" />
                           </button>
@@ -467,8 +562,15 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div className="bg-card border border-border rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-border">
-              <h2 className="font-heading text-xl font-bold text-foreground">Nova Proposta</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
+              <h2 className="font-heading text-xl font-bold text-foreground">
+                {editingId ? "Editar Proposta" : "Nova Proposta"}
+              </h2>
+              <button 
+                onClick={() => { setShowModal(false); setEditingId(null); }} 
+                className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <form onSubmit={handleCreate} className="p-6 space-y-8">
@@ -524,15 +626,43 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
-                      Cor Primária <div className="w-3 h-3 rounded-full border border-white/20" style={{ background: form.primary_color }} />
+                      Cor Primária
                     </label>
-                    <Input type="text" placeholder="#00FF9D" value={form.primary_color} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))} className="h-10 bg-secondary/30 border-border font-mono" />
+                    <div className="flex gap-2">
+                      <input 
+                        type="color" 
+                        value={form.primary_color} 
+                        onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))}
+                        className="w-10 h-10 rounded-lg bg-secondary/30 border border-border cursor-pointer overflow-hidden p-0"
+                      />
+                      <Input 
+                        type="text" 
+                        placeholder="#00FF9D" 
+                        value={form.primary_color} 
+                        onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))} 
+                        className="h-10 bg-secondary/30 border-border font-mono flex-1 text-xs" 
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
-                      Cor Secundária <div className="w-3 h-3 rounded-full border border-white/20" style={{ background: form.secondary_color }} />
+                      Cor Secundária
                     </label>
-                    <Input type="text" placeholder="#050505" value={form.secondary_color} onChange={e => setForm(f => ({ ...f, secondary_color: e.target.value }))} className="h-10 bg-secondary/30 border-border font-mono" />
+                    <div className="flex gap-2">
+                      <input 
+                        type="color" 
+                        value={form.secondary_color} 
+                        onChange={e => setForm(f => ({ ...f, secondary_color: e.target.value }))}
+                        className="w-10 h-10 rounded-lg bg-secondary/30 border border-border cursor-pointer overflow-hidden p-0"
+                      />
+                      <Input 
+                        type="text" 
+                        placeholder="#050505" 
+                        value={form.secondary_color} 
+                        onChange={e => setForm(f => ({ ...f, secondary_color: e.target.value }))} 
+                        className="h-10 bg-secondary/30 border-border font-mono flex-1 text-xs" 
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Chamada Sugerida (CTA)</label>
@@ -592,13 +722,59 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase">HTML completo da proposta *</label>
+                  <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/30">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" /> 4. Prompt Método VNG
+                      </h3>
+                      <Button 
+                        type="button" 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => {
+                          navigator.clipboard.writeText(lovablePrompt);
+                        }}
+                        className="h-7 text-[10px] text-primary hover:bg-primary/10"
+                      >
+                        <Copy className="w-3 h-3 mr-1" /> Copiar Prompt
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={lovablePrompt}
+                      className="w-full bg-primary/5 border border-primary/20 rounded-lg p-3 text-[10px] text-primary font-mono resize-none h-32 leading-relaxed"
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">Copie este prompt e cole no Lovable para gerar o código da proposta.</p>
+                  </div>
+
+                  <div className="space-y-2 sm:col-span-2 pt-4 border-t border-border/30">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">HTML completo da proposta *</label>
+                      <Button 
+                        type="button" 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setShowPreview(!showPreview)}
+                        className={`h-7 text-[10px] ${showPreview ? "text-destructive hover:bg-destructive/10" : "text-primary hover:bg-primary/10"}`}
+                      >
+                        {showPreview ? "Fechar Visualização" : "Visualizar Proposta"}
+                      </Button>
+                    </div>
                     <textarea
                       placeholder={"<!DOCTYPE html>\n<html>..."}
                       value={form.html_content} onChange={e => setForm(f => ({ ...f, html_content: e.target.value }))}
-                      required rows={6} className="w-full bg-secondary/30 border border-border rounded-lg p-3 text-xs text-foreground font-mono resize-y outline-none focus:border-primary/50"
+                      required rows={12} className="w-full bg-secondary/30 border border-border rounded-lg p-3 text-xs text-foreground font-mono resize-y outline-none focus:border-primary/50"
                     />
+                    
+                    {showPreview && (
+                      <div className="mt-4 border border-border rounded-xl overflow-hidden bg-white h-[600px]">
+                        <iframe 
+                          srcDoc={form.html_content}
+                          title="Preview"
+                          className="w-full h-full border-0"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -138,7 +138,7 @@ const Proposta = () => {
           transition={{ duration: 0.5 }}
           className="w-full max-w-5xl mx-auto"
         >
-          <div className="bg-card/40 backdrop-blur-sm border border-border rounded-2xl overflow-hidden min-h-[60vh] flex items-center justify-center relative">
+          <div className="bg-card/40 backdrop-blur-sm border border-border rounded-2xl overflow-hidden min-h-[85vh] flex items-center justify-center relative">
             {/* Corner accents */}
             <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-primary/30 rounded-tl-2xl" />
             <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-primary/30 rounded-br-2xl" />
@@ -146,30 +146,11 @@ const Proposta = () => {
             <iframe
               srcDoc={proposal?.html_content || ""}
               title="Proposal Demo"
-              className="w-full h-full min-h-[70vh] rounded-2xl bg-white border-0"
+              className="w-full h-full min-h-[85vh] rounded-2xl bg-white border-0"
             />
           </div>
         </motion.div>
       </main>
-
-      {/* Fixed bottom CTA */}
-      <div className="sticky bottom-0 border-t border-border bg-card/80 backdrop-blur-xl py-4">
-        <div className="container flex justify-center">
-          <Button
-            asChild
-            className="h-12 px-8 text-base font-semibold rounded-xl glow-teal hover:scale-[1.02] transition-all duration-300 gap-2"
-          >
-            <a
-              href="https://wa.me/5562999953623"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <MessageCircle className="w-5 h-5" />
-              Talk to a Consultant
-            </a>
-          </Button>
-        </div>
-      </div>
     </div>
   );
 };

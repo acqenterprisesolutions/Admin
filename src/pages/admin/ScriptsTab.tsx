@@ -180,38 +180,8 @@ export default function ScriptsTab({ currentUser }: { currentUser: { name: strin
           <p className="text-muted-foreground font-medium">Selecione uma proposta acima para ver os scripts.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          
-          {/* Lovable Prompt Section */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Sparkles className="w-4 h-4 text-primary" />
-              </div>
-              <h3 className="font-heading font-bold text-lg">Prompt Lovable</h3>
-            </div>
-            
-            <div className="relative group">
-              <div className="absolute top-4 right-4 z-10">
-                <Button 
-                  size="sm"
-                  onClick={() => handleCopy(editablePrompt, "prompt")}
-                  className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/20 backdrop-blur-md rounded-lg h-9"
-                >
-                  {copiedKey === "prompt" ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                  {copiedKey === "prompt" ? "Copiado" : "Copiar"}
-                </Button>
-              </div>
-              <textarea 
-                value={editablePrompt}
-                onChange={(e) => setEditablePrompt(e.target.value)}
-                className="w-full h-[450px] bg-secondary/30 border border-border rounded-2xl p-6 pt-16 font-mono text-sm leading-relaxed text-foreground/90 outline-none focus:border-primary/50 transition-colors resize-none"
-              />
-            </div>
-          </div>
-
           {/* Email Templates Section */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-primary/10">
