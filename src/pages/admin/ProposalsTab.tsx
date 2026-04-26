@@ -1,8 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  Plus, Eye, Trash2, Copy, Check, FileText, Clock, TrendingUp,
-  AlertCircle, X, Shuffle, Loader2, Mail, Building2, User, Globe, Filter,
-  Palette, Zap, Edit3, Sparkles, Search, Settings2, Save
+  Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +34,34 @@ interface Proposal {
   cta_action: string | null;
   reviews_summary: string | null;
   keywords: string | null;
+  phone: string | null;
+  address: string | null;
+  instagram: string | null;
+  tagline: string | null;
+  visual_style: string | null;
+  tone_of_voice: string | null;
+  diferencial_1: string | null;
+  diferencial_2: string | null;
+  diferencial_3: string | null;
+  anos_negocio: number | null;
+  num_clientes: number | null;
+  review_1_nome: string | null;
+  review_1_nota: number | null;
+  review_1_texto: string | null;
+  review_2_nome: string | null;
+  review_2_nota: number | null;
+  review_2_texto: string | null;
+  review_3_nome: string | null;
+  review_3_nota: number | null;
+  review_3_texto: string | null;
+  logo_url: string | null;
+  foto_1: string | null;
+  foto_2: string | null;
+  foto_3: string | null;
+  foto_4: string | null;
+  foto_5: string | null;
+  notas_parceiro: string | null;
+  preset_key: string | null;
 }
 
 type NewProposalForm = {
@@ -61,6 +85,34 @@ type NewProposalForm = {
   cta_action: string;
   reviews_summary: string;
   keywords: string;
+  phone: string;
+  address: string;
+  instagram: string;
+  tagline: string;
+  visual_style: string;
+  tone_of_voice: string;
+  diferencial_1: string;
+  diferencial_2: string;
+  diferencial_3: string;
+  anos_negocio: string;
+  num_clientes: string;
+  review_1_nome: string;
+  review_1_nota: number;
+  review_1_texto: string;
+  review_2_nome: string;
+  review_2_nota: number;
+  review_2_texto: string;
+  review_3_nome: string;
+  review_3_nota: number;
+  review_3_texto: string;
+  logo_url: string;
+  foto_1: string;
+  foto_2: string;
+  foto_3: string;
+  foto_4: string;
+  foto_5: string;
+  notas_parceiro: string;
+  preset_key: string;
 };
 
 interface AdminUser {
@@ -137,8 +189,13 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [promptTemplate, setPromptTemplate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [showPromptConfig, setShowPromptConfig] = useState(false);
-  const [editingBasePrompt, setEditingBasePrompt] = useState("");
-  const [savingBasePrompt, setSavingBasePrompt] = useState(false);
+  const [promptTemplates, setPromptTemplates] = useState<Record<string, string>>({});
+  const [editingTemplates, setEditingTemplates] = useState<Record<string, string>>({});
+  const [dirtyTemplates, setDirtyTemplates] = useState<Record<string, boolean>>({});
+  const [activeConfigTab, setActiveConfigTab] = useState("other");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [form, setForm] = useState<NewProposalForm>({
     client_name: "", access_code: generateCode(), html_content: "",
     expires_days: 8, client_email: "", client_company: "",
@@ -148,6 +205,15 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     primary_color: "#00FF9D", secondary_color: "#050505",
     cta_action: "Solicitar Orçamento", reviews_summary: "",
     keywords: "",
+    phone: "", address: "", instagram: "", tagline: "",
+    visual_style: "Clean & Minimal", tone_of_voice: "Professional & Authoritative",
+    diferencial_1: "", diferencial_2: "", diferencial_3: "",
+    anos_negocio: "", num_clientes: "",
+    review_1_nome: "", review_1_nota: 5, review_1_texto: "",
+    review_2_nome: "", review_2_nota: 5, review_2_texto: "",
+    review_3_nome: "", review_3_nota: 5, review_3_texto: "",
+    logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
+    notas_parceiro: "", preset_key: "other",
   });
 
   // Row actions
@@ -218,6 +284,34 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       cta_action:     form.cta_action || null,
       reviews_summary: form.reviews_summary || null,
       keywords:       form.keywords || null,
+      phone:          form.phone || null,
+      address:        form.address || null,
+      instagram:      form.instagram || null,
+      tagline:        form.tagline || null,
+      visual_style:   form.visual_style || null,
+      tone_of_voice:  form.tone_of_voice || null,
+      diferencial_1:  form.diferencial_1 || null,
+      diferencial_2:  form.diferencial_2 || null,
+      diferencial_3:  form.diferencial_3 || null,
+      anos_negocio:   form.anos_negocio ? parseInt(form.anos_negocio) : null,
+      num_clientes:   form.num_clientes ? parseInt(form.num_clientes) : null,
+      review_1_nome:  form.review_1_nome || null,
+      review_1_nota:  form.review_1_nota,
+      review_1_texto: form.review_1_texto || null,
+      review_2_nome:  form.review_2_nome || null,
+      review_2_nota:  form.review_2_nota,
+      review_2_texto: form.review_2_texto || null,
+      review_3_nome:  form.review_3_nome || null,
+      review_3_nota:  form.review_3_nota,
+      review_3_texto: form.review_3_texto || null,
+      logo_url:       form.logo_url || null,
+      foto_1:         form.foto_1 || null,
+      foto_2:         form.foto_2 || null,
+      foto_3:         form.foto_3 || null,
+      foto_4:         form.foto_4 || null,
+      foto_5:         form.foto_5 || null,
+      notas_parceiro: form.notas_parceiro || null,
+      preset_key:     form.preset_key || "other",
     };
 
     const { error } = editingId 
@@ -241,57 +335,184 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       primary_color: "#00FF9D", secondary_color: "#050505",
       cta_action: "Solicitar Orçamento", reviews_summary: "",
       keywords: "",
+      phone: "", address: "", instagram: "", tagline: "",
+      visual_style: "Clean & Minimal", tone_of_voice: "Professional & Authoritative",
+      diferencial_1: "", diferencial_2: "", diferencial_3: "",
+      anos_negocio: "", num_clientes: "",
+      review_1_nome: "", review_1_nota: 5, review_1_texto: "",
+      review_2_nome: "", review_2_nota: 5, review_2_texto: "",
+      review_3_nome: "", review_3_nota: 5, review_3_texto: "",
+      logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
+      notas_parceiro: "", preset_key: "other",
     });
     fetchProposals();
     setCreating(false);
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Logo deve ter no máximo 2MB");
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${form.access_code}/logo_${Math.random().toString(36).substring(7)}.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('proposal-media')
+        .upload(path, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('proposal-media')
+        .getPublicUrl(path);
+
+      setForm(f => ({ ...f, logo_url: publicUrl }));
+    } catch (err: any) {
+      alert("Erro no upload do logo: " + err.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Foto deve ter no máximo 5MB");
+      return;
+    }
+
+    setUploadingPhotos(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${form.access_code}/foto_${index}_${Math.random().toString(36).substring(7)}.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('proposal-media')
+        .upload(path, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('proposal-media')
+        .getPublicUrl(path);
+
+      setForm(f => ({ ...f, [`foto_${index}`]: publicUrl }));
+    } catch (err: any) {
+      alert("Erro no upload da foto: " + err.message);
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
   // ── Prompt Logic ──────────────────────────────────────────────────────────
-  const fetchTmpl = async () => {
-    const { data } = await supabase.from("email_templates").select("body").eq("key", "lovable_prompt").single();
-    if (data) setPromptTemplate(data.body);
+  const fetchTemplates = async () => {
+    const keys = [
+      "lovable_prompt", "prompt_healthcare", "prompt_contractor", 
+      "prompt_personal_care", "prompt_professional", "prompt_food_beverage", "prompt_other"
+    ];
+    const { data } = await supabase.from("email_templates").select("key, body").in("key", keys);
+    if (data) {
+      const tmpls: Record<string, string> = {};
+      data.forEach(item => { tmpls[item.key] = item.body; });
+      setPromptTemplates(tmpls);
+      setEditingTemplates(tmpls);
+    }
   };
 
   useEffect(() => {
-    fetchTmpl();
+    fetchTemplates();
   }, []);
 
-  const handleSaveBasePrompt = async () => {
-    setSavingBasePrompt(true);
-    await supabase.from("email_templates").update({ body: editingBasePrompt }).eq("key", "lovable_prompt");
-    setPromptTemplate(editingBasePrompt);
-    setShowPromptConfig(false);
-    setSavingBasePrompt(false);
+  const saveTemplate = async (key: string) => {
+    setSavingTemplate(true);
+    try {
+      const fullKey = key === "lovable_prompt" ? "lovable_prompt" : `prompt_${key}`;
+      const { error } = await supabase
+        .from("email_templates")
+        .update({ body: editingTemplates[fullKey] })
+        .eq("key", fullKey);
+
+      if (error) throw error;
+      
+      setPromptTemplates(prev => ({ ...prev, [fullKey]: editingTemplates[fullKey] }));
+      setDirtyTemplates(prev => ({ ...prev, [fullKey]: false }));
+    } catch (err: any) {
+      alert("Erro ao salvar template: " + err.message);
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   useEffect(() => {
-    if (!promptTemplate) return;
+    if (!currentUser) return;
     
-    const filled = promptTemplate
-      .replaceAll("{TIPO}", form.business_type || "[TIPO]")
-      .replaceAll("{BUSINESS_TYPE}", form.business_type || "[TIPO]")
+    // Choose template based on preset_key
+    const targetKey = form.preset_key && form.preset_key !== "other" 
+      ? `prompt_${form.preset_key}` 
+      : (form.preset_key === "other" ? "prompt_other" : "lovable_prompt");
+    
+    const tmpl = promptTemplates[targetKey] || promptTemplates["lovable_prompt"] || "";
+    
+    const filled = tmpl
       .replaceAll("{NOME}", form.client_company || form.client_name || "[NOME]")
-      .replaceAll("{CLIENT_COMPANY}", form.client_company || form.client_name || "[NOME]")
+      .replaceAll("{TIPO}", form.business_type || "[TIPO]")
       .replaceAll("{CIDADE}", form.city || "[CIDADE]")
-      .replaceAll("{CITY}", form.city || "[CIDADE]")
       .replaceAll("{ESTADO}", form.state || "[ESTADO]")
-      .replaceAll("{SERVICO_1}", form.service_1 || "[SERVIÇO 1]")
-      .replaceAll("{SERVICO_2}", form.service_2 || "[SERVIÇO 2]")
-      .replaceAll("{SERVICO_3}", form.service_3 || "[SERVIÇO 3]")
-      .replaceAll("{COR_1}", form.primary_color || "[COR PRIMÁRIA]")
-      .replaceAll("{COR_2}", form.secondary_color || "[COR SECUNDÁRIA]")
-      .replaceAll("{CTA}", form.cta_action || "[AÇÃO]")
-      .replaceAll("{REVIEWS}", form.reviews_summary || "[REVIEWS]")
       .replaceAll("{EMAIL}", form.client_email || "[EMAIL]")
-      .replaceAll("{KEYWORDS}", form.keywords || "[KEYWORDS]")
-      .replaceAll("{CLIENT_OWNER}", form.client_owner || form.client_name || "[NOME]")
+      .replaceAll("{COLOR_PRIMARY}", form.primary_color || "[COR]")
+      .replaceAll("{COLOR_SECONDARY}", form.secondary_color || "[COR]")
+      .replaceAll("{CTA_TEXT}", form.cta_action || "[AÇÃO]")
+      .replaceAll("{REVIEWS_SUMMARY}", form.reviews_summary || "")
+      .replaceAll("{KEYWORDS}", form.keywords || "")
+      .replaceAll("{SERVICE_1}", form.service_1 || "")
+      .replaceAll("{SERVICE_2}", form.service_2 || "")
+      .replaceAll("{SERVICE_3}", form.service_3 || "")
+      .replaceAll("{ACCESS_URL}", `${window.location.origin}/proposta?code=${form.access_code}`)
       .replaceAll("{LINK_DEMO}", `${window.location.origin}/proposta?code=${form.access_code}`)
       .replaceAll("{ACCESS_CODE}", form.access_code)
       .replaceAll("{PROPOSAL_VALUE}", form.proposal_value || "0,00")
+      .replaceAll("{PHONE}", form.phone || "none")
+      .replaceAll("{TELEFONE}", form.phone || "none")
+      .replaceAll("{ADDRESS}", form.address || "none")
+      .replaceAll("{ENDERECO}", form.address || "none")
+      .replaceAll("{INSTAGRAM}", form.instagram || "none")
+      .replaceAll("{TAGLINE}", form.tagline || "none")
+      .replaceAll("{ESTILO}", form.visual_style)
+      .replaceAll("{TOM}", form.tone_of_voice)
+      .replaceAll("{DIFERENCIAL_1}", form.diferencial_1 || "none")
+      .replaceAll("{DIFERENCIAL_2}", form.diferencial_2 || "none")
+      .replaceAll("{DIFERENCIAL_3}", form.diferencial_3 || "none")
+      .replaceAll("{ANOS}", form.anos_negocio || "none")
+      .replaceAll("{CLIENTES}", form.num_clientes || "none")
+      .replaceAll("{REVIEW_1_NOME}", form.review_1_nome || "none")
+      .replaceAll("{REVIEW_1_NOTA}", form.review_1_nota.toString())
+      .replaceAll("{REVIEW_1_TEXTO}", form.review_1_texto || "none")
+      .replaceAll("{REVIEW_2_NOME}", form.review_2_nome || "none")
+      .replaceAll("{REVIEW_2_NOTA}", form.review_2_nota.toString())
+      .replaceAll("{REVIEW_2_TEXTO}", form.review_2_texto || "none")
+      .replaceAll("{REVIEW_3_NOME}", form.review_3_nome || "none")
+      .replaceAll("{REVIEW_3_NOTA}", form.review_3_nota.toString())
+      .replaceAll("{REVIEW_3_TEXTO}", form.review_3_texto || "none")
+      .replaceAll("{LOGO_URL}", form.logo_url || "none")
+      .replaceAll("{FOTO_1}", form.foto_1 || "none")
+      .replaceAll("{FOTO_2}", form.foto_2 || "none")
+      .replaceAll("{FOTO_3}", form.foto_3 || "none")
+      .replaceAll("{FOTO_4}", form.foto_4 || "none")
+      .replaceAll("{FOTO_5}", form.foto_5 || "none")
+      .replaceAll("{NOTAS}", form.notas_parceiro || "none")
       .replaceAll("{ADMIN_NAME}", currentUser.name);
     
     setLovablePrompt(filled);
-  }, [form, promptTemplate, currentUser.name]);
+  }, [form, promptTemplates, currentUser.name]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleCopyCode = (code: string) => {
@@ -325,6 +546,34 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       cta_action: p.cta_action || "Solicitar Orçamento",
       reviews_summary: p.reviews_summary || "",
       keywords: p.keywords || "",
+      phone: p.phone || "",
+      address: p.address || "",
+      instagram: p.instagram || "",
+      tagline: p.tagline || "",
+      visual_style: p.visual_style || "Clean & Minimal",
+      tone_of_voice: p.tone_of_voice || "Professional & Authoritative",
+      diferencial_1: p.diferencial_1 || "",
+      diferencial_2: p.diferencial_2 || "",
+      diferencial_3: p.diferencial_3 || "",
+      anos_negocio: p.anos_negocio?.toString() || "",
+      num_clientes: p.num_clientes?.toString() || "",
+      review_1_nome: p.review_1_nome || "",
+      review_1_nota: p.review_1_nota || 5,
+      review_1_texto: p.review_1_texto || "",
+      review_2_nome: p.review_2_nome || "",
+      review_2_nota: p.review_2_nota || 5,
+      review_2_texto: p.review_2_texto || "",
+      review_3_nome: p.review_3_nome || "",
+      review_3_nota: p.review_3_nota || 5,
+      review_3_texto: p.review_3_texto || "",
+      logo_url: p.logo_url || "",
+      foto_1: p.foto_1 || "",
+      foto_2: p.foto_2 || "",
+      foto_3: p.foto_3 || "",
+      foto_4: p.foto_4 || "",
+      foto_5: p.foto_5 || "",
+      notas_parceiro: p.notas_parceiro || "",
+      preset_key: p.preset_key || "other",
     });
     setShowModal(true);
     setCreateError(null);
@@ -434,7 +683,12 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setEditingBasePrompt(promptTemplate); setShowPromptConfig(true); }}
+                onClick={() => {
+                  setEditingTemplates(promptTemplates);
+                  setDirtyTemplates({});
+                  setActiveConfigTab("healthcare");
+                  setShowPromptConfig(true);
+                }}
                 className="h-9 border-border bg-card/40 hover:bg-secondary/60 text-xs"
                 title="Configurar Prompt Base"
               >
@@ -455,6 +709,15 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                 primary_color: "#00FF9D", secondary_color: "#050505",
                 cta_action: "Solicitar Orçamento", reviews_summary: "",
                 keywords: "",
+                phone: "", address: "", instagram: "", tagline: "",
+                visual_style: "Clean & Minimal", tone_of_voice: "Professional & Authoritative",
+                diferencial_1: "", diferencial_2: "", diferencial_3: "",
+                anos_negocio: "", num_clientes: "",
+                review_1_nome: "", review_1_nota: 5, review_1_texto: "",
+                review_2_nome: "", review_2_nota: 5, review_2_texto: "",
+                review_3_nome: "", review_3_nota: 5, review_3_texto: "",
+                logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
+                notas_parceiro: "", preset_key: "other",
               });
               setShowModal(true); 
               setCreateError(null); 
@@ -664,6 +927,18 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Estado (UF)</label>
                     <Input type="text" placeholder="Ex: GO" maxLength={2} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} className="h-10 bg-secondary/30 border-border" />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Telefone</label>
+                    <Input type="text" placeholder="+1 (555) 000-0000" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Instagram</label>
+                    <Input type="text" placeholder="@businessname" value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Endereço Completo</label>
+                    <Input type="text" placeholder="123 Main St, Miami, FL 33101" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
                 </div>
               </div>
 
@@ -675,7 +950,70 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Ramo de Atividade (TIPO)</label>
-                    <Input type="text" placeholder="Ex: Clínica Odontológica, Escritório de Advocacia" value={form.business_type} onChange={e => setForm(f => ({ ...f, business_type: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                    <select
+                      value={form.preset_key}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const labels: Record<string, string> = {
+                          healthcare: "Healthcare (Dentist, Doctor, Therapist, Clinic)",
+                          contractor: "Contractor & Home Services (Builder, Plumber, Electrician, Roofer)",
+                          personal_care: "Personal Care (Barbershop, Salon, Spa, Tattoo)",
+                          professional: "Professional Services (Law, Accounting, Consulting, Finance)",
+                          food_beverage: "Food & Beverage (Restaurant, Café, Bakery, Food Truck)",
+                          other: "Other"
+                        };
+                        setForm(f => ({ ...f, preset_key: val, business_type: labels[val] }));
+                      }}
+                      className="w-full h-10 bg-secondary/30 border border-border rounded-md px-3 text-sm text-foreground outline-none focus:border-primary/50"
+                    >
+                      <option value="healthcare">Healthcare (Dentist, Doctor, Therapist, Clinic)</option>
+                      <option value="contractor">Contractor & Home Services (Builder, Plumber, Electrician, Roofer)</option>
+                      <option value="personal_care">Personal Care (Barbershop, Salon, Spa, Tattoo)</option>
+                      <option value="professional">Professional Services (Law, Accounting, Consulting, Finance)</option>
+                      <option value="food_beverage">Food & Beverage (Restaurant, Café, Bakery, Food Truck)</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Tagline / Slogan</label>
+                    <Input type="text" placeholder="Ex: Excellence in every cut" value={form.tagline} onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Estilo Visual</label>
+                    <select
+                      value={form.visual_style}
+                      onChange={e => setForm(f => ({ ...f, visual_style: e.target.value }))}
+                      className="w-full h-10 bg-secondary/30 border border-border rounded-md px-3 text-sm text-foreground outline-none focus:border-primary/50"
+                    >
+                      <option value="Clean & Minimal">Clean & Minimal</option>
+                      <option value="Bold & Dark">Bold & Dark</option>
+                      <option value="Warm & Friendly">Warm & Friendly</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Tom de Voz</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { id: "Professional & Authoritative", label: "🎯 Professional" },
+                        { id: "Friendly & Approachable", label: "😊 Friendly" },
+                        { id: "Bold & Direct", label: "⚡ Bold" },
+                        { id: "Calm & Reassuring", label: "🌿 Calm" }
+                      ].map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, tone_of_voice: t.id }))}
+                          className={`flex-1 min-w-[120px] px-4 py-2 rounded-lg text-xs font-bold border transition-all ${
+                            form.tone_of_voice === t.id
+                              ? "bg-primary text-black border-primary shadow-[0_0_10px_rgba(0,255,157,0.2)]"
+                              : "bg-transparent border-border text-muted-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
@@ -722,6 +1060,22 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     <Input type="text" placeholder="Ex: Agendar Consulta, Solicitar Orçamento" value={form.cta_action} onChange={e => setForm(f => ({ ...f, cta_action: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Diferenciais do Negócio</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Input placeholder="Ex: Licensed & Insured" value={form.diferencial_1} onChange={e => setForm(f => ({ ...f, diferencial_1: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                      <Input placeholder="Ex: 10+ Years Experience" value={form.diferencial_2} onChange={e => setForm(f => ({ ...f, diferencial_2: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                      <Input placeholder="Ex: Free Estimates" value={form.diferencial_3} onChange={e => setForm(f => ({ ...f, diferencial_3: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Anos de Negócio</label>
+                    <Input type="number" placeholder="10" value={form.anos_negocio} onChange={e => setForm(f => ({ ...f, anos_negocio: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Clientes Atendidos</label>
+                    <Input type="number" placeholder="500" value={form.num_clientes} onChange={e => setForm(f => ({ ...f, num_clientes: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Principais Serviços (Separados por vírgula)</label>
                     <div className="grid grid-cols-3 gap-2">
                       <Input placeholder="Serviço 1" value={form.service_1} onChange={e => setForm(f => ({ ...f, service_1: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
@@ -729,13 +1083,139 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       <Input placeholder="Serviço 3" value={form.service_3} onChange={e => setForm(f => ({ ...f, service_3: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
                     </div>
                   </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase">Resumo de Reviews (Social Proof)</label>
-                    <textarea 
-                      placeholder="Ex: 5 estrelas no Google, mais de 200 clientes satisfeitos..." 
-                      value={form.reviews_summary} onChange={e => setForm(f => ({ ...f, reviews_summary: e.target.value }))}
-                      className="w-full bg-secondary/30 border border-border rounded-lg p-3 text-sm text-foreground outline-none focus:border-primary/50 transition-colors h-20 resize-none"
-                    />
+                  
+                  <div className="space-y-6 sm:col-span-2 pt-4 border-t border-border/30">
+                    <label className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">Depoimentos (Reviews Estruturados)</label>
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="p-4 rounded-xl bg-secondary/15 border border-border/50 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Avaliador {i}</label>
+                            <Input
+                              placeholder="Nome do cliente"
+                              value={(form as any)[`review_${i}_nome`]}
+                              onChange={e => setForm(f => ({ ...f, [`review_${i}_nome`]: e.target.value }))}
+                              className="h-9 bg-secondary/30 border-border text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Nota</label>
+                            <select
+                              value={(form as any)[`review_${i}_nota`]}
+                              onChange={e => setForm(f => ({ ...f, [`review_${i}_nota`]: parseInt(e.target.value) }))}
+                              className="w-full h-9 bg-secondary/30 border border-border rounded-md px-2 text-xs text-foreground outline-none focus:border-primary/50"
+                            >
+                              <option value="5">5 Estrelas</option>
+                              <option value="4">4 Estrelas</option>
+                              <option value="3">3 Estrelas</option>
+                              <option value="2">2 Estrelas</option>
+                              <option value="1">1 Estrela</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Texto do Review</label>
+                            <span className={`text-[9px] ${((form as any)[`review_${i}_texto`]?.length || 0) > 150 ? "text-destructive" : "text-muted-foreground"}`}>
+                              {((form as any)[`review_${i}_texto`]?.length || 0)}/150
+                            </span>
+                          </div>
+                          <textarea
+                            placeholder="Descreva a experiência do cliente..."
+                            maxLength={150}
+                            value={(form as any)[`review_${i}_texto`]}
+                            onChange={e => setForm(f => ({ ...f, [`review_${i}_texto`]: e.target.value }))}
+                            className="w-full bg-secondary/30 border border-border rounded-lg p-2.5 text-xs text-foreground outline-none focus:border-primary/50 resize-none h-16"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 📸 Images Section */}
+              <div className="space-y-4 pt-4 border-t border-border/30">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
+                  <Camera className="w-4 h-4" /> 3. Imagens do Negócio
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Logo Upload */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase flex justify-between">
+                      Logo da Empresa (PNG/SVG/JPG, max 2MB)
+                      {form.logo_url && (
+                        <button type="button" onClick={() => setForm(f => ({ ...f, logo_url: "" }))} className="text-destructive hover:underline text-[10px]">Remover Logo</button>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-4 p-4 bg-secondary/15 border border-dashed border-border rounded-xl">
+                      {form.logo_url ? (
+                        <div className="relative group w-20 h-20 bg-white rounded-lg overflow-hidden border border-border">
+                          <img src={form.logo_url} alt="Logo preview" className="w-full h-full object-contain" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <ImageIcon className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="w-20 h-20 bg-secondary/30 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-secondary/50 transition-colors border border-border">
+                          {uploadingLogo ? (
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                          ) : (
+                            <>
+                              <Upload className="w-6 h-6 text-muted-foreground" />
+                              <span className="text-[9px] text-muted-foreground mt-1">Upload</span>
+                            </>
+                          )}
+                          <input type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={handleLogoUpload} className="hidden" />
+                        </label>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-xs text-foreground font-medium">{form.logo_url ? "Logo carregado com sucesso" : "Arraste ou clique para enviar"}</p>
+                        <p className="text-[10px] text-muted-foreground">O logo será usado no cabeçalho e rodapé da landing page.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Photos Upload Grid */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Fotos do Negócio (Até 5 fotos - JPG/PNG, max 5MB cada)</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {[1, 2, 3, 4, 5].map(i => {
+                        const url = (form as any)[`foto_${i}`];
+                        return (
+                          <div key={i} className="space-y-1.5">
+                            <div className="relative aspect-square bg-secondary/15 border border-dashed border-border rounded-lg overflow-hidden group">
+                              {url ? (
+                                <>
+                                  <img src={url} alt={`Photo ${i}`} className="w-full h-full object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm(f => ({ ...f, [`foto_${i}`]: "" }))}
+                                    className="absolute top-1 right-1 p-1 bg-destructive/80 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </>
+                              ) : (
+                                <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-secondary/50 transition-colors">
+                                  {uploadingPhotos ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                  ) : (
+                                    <>
+                                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                                      <span className="text-[8px] text-muted-foreground mt-1">Foto {i}</span>
+                                    </>
+                                  )}
+                                  <input type="file" accept="image/jpeg,image/png" onChange={(e) => handlePhotoUpload(e, i)} className="hidden" />
+                                </label>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-center text-muted-foreground">{i === 1 ? "Destaque (Hero)" : i === 2 ? "Sobre" : "Galeria"}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -743,7 +1223,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
               {/* Proposal & Technical */}
               <div className="space-y-4 pt-4 border-t border-border/30">
                 <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
-                  <Zap className="w-4 h-4" /> 3. Detalhes Técnicos & Valor
+                  <Zap className="w-4 h-4" /> 4. Detalhes Técnicos & Valor
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2 sm:col-span-2">
@@ -761,9 +1241,18 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Valor do contrato (R$)</label>
                     <Input type="number" step="0.01" min="0" placeholder="5000.00" value={form.proposal_value} onChange={e => setForm(f => ({ ...f, proposal_value: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
                   </div>
-                  <div className="space-y-2 sm:col-span-2">
+                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Palavras-chave (SEO)</label>
                     <Input type="text" placeholder="Ex: dentista em goiânia, implante dentario" value={form.keywords} onChange={e => setForm(f => ({ ...f, keywords: e.target.value }))} className="h-10 bg-secondary/30 border-border" />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Notas do Parceiro (Instruções Especiais)</label>
+                    <textarea
+                      placeholder="Ex: cliente quer tema escuro, possui fonte personalizada..."
+                      value={form.notas_parceiro}
+                      onChange={e => setForm(f => ({ ...f, notas_parceiro: e.target.value }))}
+                      className="w-full bg-secondary/30 border border-border rounded-lg p-3 text-sm text-foreground outline-none focus:border-primary/50 transition-colors h-24 resize-none"
+                    />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Prazo de acesso</label>
@@ -802,7 +1291,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
 
                   <div className="space-y-2 sm:col-span-2 pt-4 border-t border-border/30">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">HTML completo da proposta *</label>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">HTML ou Link da Proposta *</label>
                       <Button 
                         type="button" 
                         size="sm" 
@@ -814,18 +1303,26 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       </Button>
                     </div>
                     <textarea
-                      placeholder={"<!DOCTYPE html>\n<html>..."}
+                      placeholder={"Cole aqui o link (ex: https://...) ou o código HTML completo da proposta."}
                       value={form.html_content} onChange={e => setForm(f => ({ ...f, html_content: e.target.value }))}
                       required rows={12} className="w-full bg-secondary/30 border border-border rounded-lg p-3 text-xs text-foreground font-mono resize-y outline-none focus:border-primary/50"
                     />
+                    <p className="text-[10px] text-muted-foreground mt-1">Dica: Se usar o Lovable, pode colar apenas o link do site publicado.</p>
                     
                     {showPreview && (
                       <div className="mt-4 border border-border rounded-xl overflow-hidden bg-white h-[600px]">
-                        <iframe 
-                          srcDoc={form.html_content}
-                          title="Preview"
-                          className="w-full h-full border-0"
-                        />
+                        {(() => {
+                          const isUrl = /^(https?:\/\/)/i.test(form.html_content.trim());
+                          return (
+                            <iframe 
+                              src={isUrl ? form.html_content.trim() : undefined}
+                              srcDoc={isUrl ? undefined : form.html_content}
+                              title="Preview"
+                              className="w-full h-full border-0"
+                              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            />
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -848,42 +1345,132 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
           </div>
         </div>
       )}
-      {showPromptConfig && isMaster && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col h-[85vh]">
-            <div className="flex items-center justify-between p-6 border-b border-border bg-secondary/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
+      {/* Modal Prompt Master Config */}
+      {showPromptConfig && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0A0A0A] border border-border w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-border flex justify-between items-center bg-secondary/10">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
                   <Settings2 className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="font-heading text-lg font-bold text-foreground">Configurar Prompt LandingPage Base</h2>
+                  Templates de Inteligência Artificial
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">Configure as instruções para cada segmento de negócio.</p>
               </div>
-              <button onClick={() => setShowPromptConfig(false)} className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors">
+              <Button variant="ghost" size="icon" onClick={() => setShowPromptConfig(false)} className="rounded-full hover:bg-white/10">
                 <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 flex-1 overflow-y-auto space-y-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Este é o esqueleto (template) do prompt que o sistema usa para preencher os dados de todas as propostas geradas pelos usuários. Use as tags para substituição automática: <br/>
-                <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{NOME}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{TIPO}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{CIDADE}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{ESTADO}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{SERVICO_1}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{COR_1}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{COR_2}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{CTA}`}</code>, <code className="text-primary bg-primary/10 px-1 py-0.5 rounded">{`{REVIEWS}`}</code>, etc.
-              </p>
-              
-              <textarea
-                value={editingBasePrompt}
-                onChange={e => setEditingBasePrompt(e.target.value)}
-                className="w-full h-full min-h-[400px] bg-secondary/30 border border-border rounded-xl p-4 text-xs font-mono text-foreground outline-none focus:border-primary/50 resize-y"
-              />
-            </div>
-            
-            <div className="p-6 border-t border-border flex justify-end gap-3 bg-secondary/10">
-              <Button type="button" variant="outline" onClick={() => setShowPromptConfig(false)} className="bg-transparent border-border hover:bg-secondary/60">
-                Cancelar
               </Button>
-              <Button onClick={handleSaveBasePrompt} disabled={savingBasePrompt} className="bg-primary text-black font-bold hover:bg-primary/90">
-                {savingBasePrompt ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Salvar Prompt
-              </Button>
+            </div>
+
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Tab Strip */}
+              <div className="flex overflow-x-auto gap-1 p-2 bg-secondary/5 border-b border-border no-scrollbar">
+                {[
+                  { id: "healthcare", label: "Healthcare" },
+                  { id: "contractor", label: "Contractor" },
+                  { id: "personal_care", label: "Personal" },
+                  { id: "professional", label: "Professional" },
+                  { id: "food_beverage", label: "Food & Bev" },
+                  { id: "other", label: "Other (Generic)" }
+                ].map(tab => {
+                  const fullKey = `prompt_${tab.id}`;
+                  const isDirty = dirtyTemplates[fullKey];
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        if (Object.values(dirtyTemplates).some(v => v)) {
+                          if (activeConfigTab !== tab.id && !confirm("Você tem alterações não salvas nesta aba. Deseja mudar assim mesmo?")) {
+                            return;
+                          }
+                        }
+                        setActiveConfigTab(tab.id);
+                      }}
+                      className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                        activeConfigTab === tab.id
+                          ? "bg-primary text-black shadow-[0_0_15px_rgba(0,255,157,0.25)]"
+                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                      }`}
+                    >
+                      {tab.label}
+                      {isDirty && <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Alterações não salvas" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="flex justify-between items-end mb-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-primary uppercase tracking-tighter">Corpo do Prompt (Instruções)</label>
+                    <p className="text-[10px] text-muted-foreground">O modelo abaixo será preenchido com as variáveis do formulário.</p>
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground bg-secondary/20 px-2 py-1 rounded">
+                    Key: prompt_{activeConfigTab}
+                  </div>
+                </div>
+
+                <textarea
+                  value={editingTemplates[`prompt_${activeConfigTab}`] || ""}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const key = `prompt_${activeConfigTab}`;
+                    setEditingTemplates(prev => ({ ...prev, [key]: val }));
+                    setDirtyTemplates(prev => ({ ...prev, [key]: val !== promptTemplates[key] }));
+                  }}
+                  className="w-full h-[350px] bg-secondary/15 border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed"
+                  placeholder="Instruções para o Claude/GPT..."
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-border/30">
+                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+                    <h4 className="text-[10px] font-bold text-primary uppercase mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Dica de Variáveis
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      Use tags como <code className="text-primary">{`{NOME}`}</code>, <code className="text-primary">{`{TOM}`}</code>, <code className="text-primary">{`{REVIEW_1_TEXTO}`}</code>, <code className="text-primary">{`{LOGO_URL}`}</code> e <code className="text-primary">{`{FOTO_1}`}</code>. 
+                      Há um total de 37 variáveis disponíveis.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                    <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1.5">
+                      <Zap className="w-3 h-3" /> Regra de Tech Stack
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      Sempre peça ao modelo para usar **Vanilla HTML/CSS/JS**. 
+                      Não use CDNs de Tailwind ou frameworks externos para garantir portabilidade.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border bg-secondary/10 flex justify-between items-center gap-4">
+                <p className="text-[11px] text-muted-foreground">
+                  {dirtyTemplates[`prompt_${activeConfigTab}`] 
+                    ? "⚠️ Você possui alterações não salvas nesta aba." 
+                    : "✅ Template sincronizado com o banco de dados."}
+                </p>
+                <div className="flex gap-3">
+                  <Button variant="ghost" onClick={() => setShowPromptConfig(false)}>Cancelar</Button>
+                  <Button 
+                    className="bg-primary text-black font-bold h-10 px-8" 
+                    onClick={() => saveTemplate(activeConfigTab)}
+                    disabled={savingTemplate || !dirtyTemplates[`prompt_${activeConfigTab}`]}
+                  >
+                    {savingTemplate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Salvar Template
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

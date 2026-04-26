@@ -195,11 +195,19 @@ const Proposta = () => {
             <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-primary/30 rounded-tl-2xl" />
             <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-primary/30 rounded-br-2xl" />
 
-            <iframe
-              srcDoc={proposal?.html_content || ""}
-              title="Proposal Demo"
-              className="w-full h-full min-h-[85vh] rounded-2xl bg-white border-0"
-            />
+            {(() => {
+              const content = proposal?.html_content as string || "";
+              const isUrl = /^(https?:\/\/)/i.test(content.trim());
+              return (
+                <iframe
+                  src={isUrl ? content.trim() : undefined}
+                  srcDoc={isUrl ? undefined : content}
+                  title="Proposal Demo"
+                  className="w-full h-full min-h-[85vh] rounded-2xl bg-white border-0"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                />
+              );
+            })()}
           </div>
         </motion.div>
       </main>
