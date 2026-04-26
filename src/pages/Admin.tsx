@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LogOut, AlertCircle, Loader2, Sun, Moon, 
-  FileText, Users, DollarSign, Sparkles, RefreshCw
+  FileText, Users, DollarSign, Sparkles, RefreshCw, ListFilter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import ProposalsTab from "./admin/ProposalsTab";
 import UsersTab from "./admin/UsersTab";
 import BillingTab from "./admin/BillingTab";
 import ScriptsTab from "./admin/ScriptsTab";
+import LeadsTab from "./admin/LeadsTab";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 type AdminUser = { 
@@ -37,7 +38,7 @@ export default function Admin() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"proposals" | "billing" | "users" | "scripts">("proposals");
+  const [activeTab, setActiveTab] = useState<"proposals" | "billing" | "users" | "scripts" | "leads">("proposals");
 
   // Theme
   const [darkMode, setDarkMode] = useState(true);
@@ -208,6 +209,12 @@ export default function Admin() {
             {isMaster && (
               <>
                 <TabButton 
+                  active={activeTab === "leads"} 
+                  onClick={() => setActiveTab("leads")} 
+                  icon={<ListFilter className="w-4 h-4" />}
+                  label="Leads" 
+                />
+                <TabButton 
                   active={activeTab === "billing"} 
                   onClick={() => setActiveTab("billing")} 
                   icon={<DollarSign className="w-4 h-4" />}
@@ -272,6 +279,12 @@ export default function Admin() {
             {isMaster && (
               <>
                 <TabButton 
+                  active={activeTab === "leads"} 
+                  onClick={() => setActiveTab("leads")} 
+                  icon={<ListFilter className="w-4 h-4" />}
+                  compact
+                />
+                <TabButton 
                   active={activeTab === "billing"} 
                   onClick={() => setActiveTab("billing")} 
                   icon={<DollarSign className="w-4 h-4" />}
@@ -302,6 +315,7 @@ export default function Admin() {
           transition={{ duration: 0.2 }}
         >
           {activeTab === "proposals" && <ProposalsTab currentUser={currentUser!} />}
+          {activeTab === "leads" && isMaster && <LeadsTab currentUserName={currentUser!.name} />}
           {activeTab === "billing" && isMaster && <BillingTab />}
           {activeTab === "users" && isMaster && <UsersTab />}
           {activeTab === "scripts" && <ScriptsTab currentUser={currentUser!} />}

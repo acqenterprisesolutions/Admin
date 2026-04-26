@@ -1,4 +1,5 @@
-  Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon
+  Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon,
+  Database, ChevronRight, Circle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,42 @@ import { supabase } from "@/lib/supabase";
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Status = "pending" | "approved" | "revision_requested" | "expired";
 type StatusFilter = "all" | Status;
+
+interface LeadListEntry {
+  id: string;
+  title: string;
+  category: string | null;
+  total_leads: number;
+  viewed_at: string | null;
+}
+
+interface LeadEntry {
+  id: string;
+  list_id: string;
+  business_name: string | null;
+  phone: string | null;
+  category: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  website: string | null;
+  email: string | null;
+  google_rating: number | null;
+  review_count: number | null;
+  potencial: "bom" | "medio" | "ruim" | null;
+  proposal_id: string | null;
+}
+
+const PRESET_KEY_MAP: Record<string, string> = {
+  healthcare: "Healthcare",
+  contractor: "Contractor & Home Services",
+  personal_care: "Personal Care",
+  professional: "Professional Services",
+  food_beverage: "Food & Beverage",
+  dentist: "Healthcare",
+  dental: "Healthcare",
+  other: "Other (Generic)",
+};
 
 interface Proposal {
   id: string;
@@ -196,6 +233,16 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  // ── Lead Selection States ─────────────────────────────────────────────────
+  const [showLeadDrawer, setShowLeadDrawer] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [leadLists, setLeadLists] = useState<LeadListEntry[]>([]);
+  const [leadDrawerTab, setLeadDrawerTab] = useState<string>("");
+  const [drawerLeads, setDrawerLeads] = useState<LeadEntry[]>([]);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerSearch, setDrawerSearch] = useState("");
+  const [newListBadge, setNewListBadge] = useState(0);
   const [form, setForm] = useState<NewProposalForm>({
     client_name: "", access_code: generateCode(), html_content: "",
     expires_days: 8, client_email: "", client_company: "",
@@ -250,6 +297,43 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   useEffect(() => {
     fetchProposals();
   }, [fetchProposals]);
+
+  // ── Lead Lists Fetch ─────────────────────────────────────────────────
+  const fetchLeadLists = useCallback(async () => {
+    // Get admin_users row for current user
+    const { data: userRow } = await supabase
+      .from("admin_users")
+      .select("id")
+      .eq("name", currentUser.name)
+      .maybeSingle();
+
+    if (!userRow?.id) return;
+
+    const { data } = await supabase
+      .from("list_assignments")
+      .select("list_id, viewed_at, lead_lists(id, title, category, total_leads)")
+      .eq("user_id", userRow.id);
+
+    if (data) {
+      const lists = data
+        .filter((a: any) => a.lead_lists)
+        .map((a: any) => ({ ...a.lead_lists, viewed_at: a.viewed_at })) as LeadListEntry[];
+      setLeadLists(lists);
+      setNewListBadge(lists.filter(l => !l.viewed_at).length);
+      if (lists.length > 0 && !leadDrawerTab) setLeadDrawerTab(lists[0].id);
+    }
+  }, [currentUser.name, leadDrawerTab]);
+
+  useEffect(() => {
+    if (!isMaster) fetchLeadLists();
+  }, [fetchLeadLists, isMaster]);
+
+  const fetchLeadsForList = async (listId: string) => {
+    setDrawerLoading(true);
+    const { data } = await supabase.from("leads").select("*").eq("list_id", listId).order("inserted_at");
+    setDrawerLeads((data ?? []) as LeadEntry[]);
+    setDrawerLoading(false);
+  };
 
   // ── Create ───────────────────────────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
@@ -314,14 +398,20 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       preset_key:     form.preset_key || "other",
     };
 
-    const { error } = editingId 
-      ? await supabase.from("proposals").update(payload).eq("id", editingId)
-      : await supabase.from("proposals").insert(payload);
+    const { data: inserted, error } = editingId
+      ? await (async () => { const r = await supabase.from("proposals").update(payload).eq("id", editingId).select().single(); return r; })()
+      : await supabase.from("proposals").insert(payload).select().single();
 
     if (error) {
       setCreateError(error.code === "23505" ? "Código já está em uso. Gere um novo." : error.message);
       setCreating(false);
       return;
+    }
+
+    // Link lead to proposal (if a lead was selected)
+    if (selectedLeadId && !editingId && inserted?.id) {
+      await supabase.from("leads").update({ proposal_id: inserted.id }).eq("id", selectedLeadId);
+      setSelectedLeadId(null);
     }
 
     setShowModal(false);
@@ -346,6 +436,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       notas_parceiro: "", preset_key: "other",
     });
     fetchProposals();
+    if (!isMaster) fetchLeadLists();
     setCreating(false);
   };
 
@@ -594,7 +685,64 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     setUpdatingId(null);
   };
 
+  // ── Lead Drawer Helpers ───────────────────────────────────────────────────
+  const handleOpenLeadDrawer = async () => {
+    setShowLeadDrawer(true);
+    setDrawerSearch("");
+    if (leadLists.length > 0) {
+      const firstListId = leadLists[0].id;
+      setLeadDrawerTab(firstListId);
+      await fetchLeadsForList(firstListId);
+      // Mark all lists as viewed in DB
+      const { data: userRow } = await supabase.from("admin_users").select("id").eq("name", currentUser.name).maybeSingle();
+      if (userRow?.id) {
+        await supabase.from("list_assignments").update({ viewed_at: new Date().toISOString() }).eq("user_id", userRow.id).is("viewed_at", null);
+        setNewListBadge(0);
+      }
+    }
+  };
+
+  const handleSelectLead = (lead: LeadEntry) => {
+    setSelectedLeadId(lead.id);
+    // Map lead category to preset_key
+    const catLower = (lead.category ?? "").toLowerCase();
+    let preset_key = "other";
+    if (catLower.includes("dent") || catLower.includes("health") || catLower.includes("medical") || catLower.includes("doctor")) preset_key = "healthcare";
+    else if (catLower.includes("contract") || catLower.includes("plumb") || catLower.includes("electr") || catLower.includes("hvac") || catLower.includes("roofing")) preset_key = "contractor";
+    else if (catLower.includes("salon") || catLower.includes("hair") || catLower.includes("beauty") || catLower.includes("spa") || catLower.includes("nail")) preset_key = "personal_care";
+    else if (catLower.includes("lawyer") || catLower.includes("attorney") || catLower.includes("account") || catLower.includes("financial") || catLower.includes("consult")) preset_key = "professional";
+    else if (catLower.includes("restaurant") || catLower.includes("food") || catLower.includes("cafe") || catLower.includes("pizza") || catLower.includes("bar")) preset_key = "food_beverage";
+
+    const ratingValue = lead.google_rating ? Math.min(5, Math.round(lead.google_rating)) : 5;
+
+    setForm(prev => ({
+      ...prev,
+      client_company: lead.business_name ?? "",
+      client_name: lead.business_name ?? "",
+      phone: lead.phone ?? "",
+      client_email: lead.email ?? "",
+      client_website: lead.website ?? "",
+      address: lead.address ?? "",
+      city: lead.city ?? "",
+      state: lead.state ?? "",
+      business_type: PRESET_KEY_MAP[preset_key] ?? "Other",
+      preset_key,
+      review_1_nota: ratingValue,
+    }));
+    setShowLeadDrawer(false);
+    // Open the new proposal modal
+    setEditingId(null);
+    setCreateError(null);
+    setShowModal(true);
+  };
+
+  const handleLeadPotencial = async (leadId: string, potencial: "bom" | "medio" | "ruim") => {
+    await supabase.from("leads").update({ potencial }).eq("id", leadId);
+    setDrawerLeads(prev => prev.map(l => l.id === leadId ? { ...l, potencial } : l));
+  };
+
   // ── Computed ─────────────────────────────────────────────────────────────
+
   let filtered = proposals.filter(p => filter === "all" || p.status === filter);
 
   // Master advanced filters
@@ -697,9 +845,26 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
               </Button>
             )}
 
+            {!isMaster && leadLists.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleOpenLeadDrawer}
+                className="relative h-9 border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold gap-2"
+              >
+                <Database className="w-4 h-4" />
+                <span className="hidden sm:inline">Selecionar Lead</span>
+                {newListBadge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-green-500 text-black text-[9px] font-bold flex items-center justify-center animate-pulse">
+                    {newListBadge}
+                  </span>
+                )}
+              </Button>
+            )}
+
             <Button
             onClick={() => { 
               setEditingId(null);
+              setSelectedLeadId(null);
               setForm({
                 client_name: "", access_code: generateCode(), html_content: "",
                 expires_days: 8, client_email: "", client_company: "",
@@ -728,6 +893,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
           </Button>
           </div>
         </div>
+
 
         {/* Master Advanced Filters */}
         {isMaster && (
@@ -1475,6 +1641,154 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
           </div>
         </div>
       )}
+
+      {/* ── Lead Selection Drawer ──────────────────────────────────────────── */}
+      {showLeadDrawer && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+          <div className="bg-[#0A0A0A] border border-border w-full sm:max-w-3xl max-h-[92vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-border flex justify-between items-center flex-shrink-0 bg-secondary/5">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Database className="w-5 h-5 text-primary" /> Selecionar Lead
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Clique em um lead para pré-preencher a proposta.</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowLeadDrawer(false)} className="rounded-full hover:bg-white/10">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            {leadLists.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center p-6">
+                <Database className="w-10 h-10 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">Nenhuma lista atribuída a você ainda.</p>
+                <p className="text-muted-foreground text-xs mt-1">Aguarde o administrador atribuir uma lista.</p>
+              </div>
+            ) : (
+              <>
+                {/* List Tabs */}
+                <div className="flex overflow-x-auto gap-1 p-2 bg-secondary/5 border-b border-border flex-shrink-0 no-scrollbar">
+                  {leadLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={async () => {
+                        setLeadDrawerTab(list.id);
+                        setDrawerSearch("");
+                        await fetchLeadsForList(list.id);
+                      }}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                        leadDrawerTab === list.id
+                          ? "bg-primary text-black"
+                          : "bg-transparent text-muted-foreground hover:bg-white/5"
+                      }`}
+                    >
+                      {list.title}
+                      <span className="opacity-60">({list.total_leads})</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <div className="p-3 border-b border-border flex-shrink-0">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      placeholder="Buscar por nome..."
+                      value={drawerSearch}
+                      onChange={e => setDrawerSearch(e.target.value)}
+                      className="w-full h-9 bg-secondary/20 border border-border rounded-lg pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary/50"
+                    />
+                  </div>
+                </div>
+
+                {/* Lead List */}
+                <div className="flex-1 overflow-y-auto">
+                  {drawerLoading ? (
+                    <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-primary w-8 h-8" /></div>
+                  ) : (() => {
+                    const filtered = drawerLeads.filter(l =>
+                      !drawerSearch || (l.business_name ?? "").toLowerCase().includes(drawerSearch.toLowerCase())
+                    );
+                    const available = filtered.filter(l => !l.proposal_id);
+                    const done = filtered.filter(l => l.proposal_id);
+
+                    return (
+                      <div className="divide-y divide-border/50">
+                        {available.length === 0 && done.length === 0 && (
+                          <div className="text-center py-12 text-muted-foreground text-sm">Nenhum lead encontrado.</div>
+                        )}
+                        {available.map(lead => (
+                          <div key={lead.id} className="flex items-center gap-3 p-4 hover:bg-primary/5 transition-colors group">
+                            {/* Potencial buttons */}
+                            <div className="flex flex-col gap-1 flex-shrink-0">
+                              {(["bom", "medio", "ruim"] as const).map(p => (
+                                <button
+                                  key={p}
+                                  onClick={e => { e.stopPropagation(); handleLeadPotencial(lead.id, p); }}
+                                  className={`text-[9px] px-1.5 py-0.5 rounded font-bold transition-all border ${
+                                    lead.potencial === p
+                                      ? p === "bom" ? "bg-green-500 text-black border-green-500" 
+                                        : p === "medio" ? "bg-yellow-500 text-black border-yellow-500" 
+                                        : "bg-red-500 text-black border-red-500"
+                                      : "bg-transparent text-muted-foreground border-border hover:border-primary/50"
+                                  }`}
+                                  title={`Classificar como ${p}`}
+                                >
+                                  {p === "bom" ? "🟢" : p === "medio" ? "🟡" : "🔴"}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Lead Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-foreground truncate">{lead.business_name ?? "Sem nome"}</p>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                {lead.category && <span className="text-[10px] text-muted-foreground">{lead.category}</span>}
+                                {lead.state && <span className="text-[10px] text-muted-foreground">{lead.state}</span>}
+                                {lead.google_rating && (
+                                  <span className="text-[10px] text-yellow-400 font-semibold">⭐ {lead.google_rating}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Select Button */}
+                            <Button
+                              size="sm"
+                              onClick={() => handleSelectLead(lead)}
+                              className="bg-primary text-black font-bold text-xs h-8 px-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            >
+                              Usar <ChevronRight className="w-3 h-3 ml-1" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        {done.length > 0 && (
+                          <>
+                            <div className="px-4 py-2 bg-secondary/20">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Já possuem proposta ({done.length})</p>
+                            </div>
+                            {done.map(lead => (
+                              <div key={lead.id} className="flex items-center gap-3 p-4 opacity-40">
+                                <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-foreground truncate">{lead.business_name ?? "Sem nome"}</p>
+                                  <span className="text-[10px] text-blue-400">Proposta gerada</span>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
