@@ -4,7 +4,7 @@ import {
   Database, ChevronRight, Circle, X, Loader2, Plus, Eye, Clock, CheckCircle, XCircle,
   AlertCircle, ChevronDown, Star, Phone, MapPin, Globe, FileText, Users, Trash2,
   RotateCcw, Download, ExternalLink, Bell, Filter,
-  TrendingUp, Check, Copy, Mail, User, Shuffle
+  TrendingUp, Check, Copy, Mail, User, Shuffle, Send, History, RefreshCw, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -273,6 +273,44 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // ── Email Modal States ───────────────────────────────────────────────────
+  interface EmailLog {
+    id: string;
+    template_key: string;
+    template_title: string;
+    sent_to: string;
+    sent_by: string;
+    subject: string;
+    sent_at: string;
+    status: string;
+    replied_at: string | null;
+    remarketing_enabled: boolean;
+    remarketing_interval_days: number;
+    next_followup_at: string | null;
+    followup_count: number;
+  }
+  interface EmailTemplate {
+    id: string;
+    key: string;
+    title: string;
+    subject: string | null;
+    body: string;
+  }
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailProposal, setEmailProposal] = useState<Proposal | null>(null);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedEmailTemplateKey, setSelectedEmailTemplateKey] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSendResult, setEmailSendResult] = useState<{ success?: boolean; error?: string } | null>(null);
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [emailLogsLoading, setEmailLogsLoading] = useState(false);
+  const [showEmailHistory, setShowEmailHistory] = useState(false);
+  const [remarketingEnabled, setRemarketingEnabled] = useState(false);
+  const [remarketingDays, setRemarketingDays] = useState(7);
+  const API_BASE = "https://admin.acqent.solutions";
 
   // ── Data ─────────────────────────────────────────────────────────────────
   const fetchProposals = useCallback(async () => {
@@ -617,6 +655,118 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
+
+  // ── Email Modal Helpers ───────────────────────────────────────────────────
+  const replaceEmailTags = (text: string, p: Proposal): string => {
+    if (!text) return "";
+    return text
+      .replaceAll("{NOME}", p.client_company || p.client_name || "[NOME]")
+      .replaceAll("{CLIENT_COMPANY}", p.client_company || p.client_name || "[NOME]")
+      .replaceAll("{CLIENT_OWNER}", p.client_owner || p.client_name || "[NOME]")
+      .replaceAll("{TIPO}", p.business_type || "[TIPO]")
+      .replaceAll("{CIDADE}", p.city || "[CIDADE]")
+      .replaceAll("{ESTADO}", p.state || "[ESTADO]")
+      .replaceAll("{EMAIL}", p.client_email || "[EMAIL]")
+      .replaceAll("{SERVICO_1}", p.service_1 || "[SERVIÇO 1]")
+      .replaceAll("{SERVICO_2}", p.service_2 || "[SERVIÇO 2]")
+      .replaceAll("{SERVICO_3}", p.service_3 || "[SERVIÇO 3]")
+      .replaceAll("{CTA}", p.cta_action || "[AÇÃO]")
+      .replaceAll("{LINK_DEMO}", `${window.location.origin}/proposta?code=${p.access_code}`)
+      .replaceAll("{ACCESS_CODE}", p.access_code)
+      .replaceAll("{PROPOSAL_VALUE}", p.proposal_value?.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) || "0,00")
+      .replaceAll("{ADMIN_NAME}", currentUser.name);
+  };
+
+  const fetchEmailTemplates = async () => {
+    const { data } = await supabase
+      .from("email_templates")
+      .select("id, key, title, subject, body")
+      .neq("key", "lovable_prompt")
+      .order("key", { ascending: true });
+    if (data) setEmailTemplates(data as EmailTemplate[]);
+  };
+
+  const fetchEmailLogs = async (proposalId: string) => {
+    setEmailLogsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/email-logs?proposalId=${proposalId}`);
+      const json = await res.json();
+      setEmailLogs(json.logs || []);
+    } catch {
+      setEmailLogs([]);
+    } finally {
+      setEmailLogsLoading(false);
+    }
+  };
+
+  const handleOpenEmailModal = async (p: Proposal) => {
+    if (!p.client_email) {
+      alert("Esta proposta não possui e-mail do cliente cadastrado.");
+      return;
+    }
+    setEmailProposal(p);
+    setEmailSendResult(null);
+    setShowEmailHistory(false);
+    setRemarketingEnabled(false);
+    setRemarketingDays(7);
+    setSelectedEmailTemplateKey("");
+    setEmailSubject("");
+    setEmailBody("");
+    await Promise.all([fetchEmailTemplates(), fetchEmailLogs(p.id)]);
+    setShowEmailModal(true);
+  };
+
+  const handleEmailTemplateChange = (key: string) => {
+    setSelectedEmailTemplateKey(key);
+    if (!emailProposal || !key) { setEmailSubject(""); setEmailBody(""); return; }
+    const tmpl = emailTemplates.find(t => t.key === key);
+    if (!tmpl) return;
+    setEmailSubject(replaceEmailTags(tmpl.subject || "", emailProposal));
+    setEmailBody(replaceEmailTags(tmpl.body, emailProposal));
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailProposal || !emailSubject || !emailBody || !selectedEmailTemplateKey) return;
+    setEmailSending(true);
+    setEmailSendResult(null);
+    try {
+      const tmpl = emailTemplates.find(t => t.key === selectedEmailTemplateKey);
+      const res = await fetch(`${API_BASE}/api/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailProposal.client_email,
+          subject: emailSubject,
+          emailBody,
+          proposalId: emailProposal.id,
+          templateKey: selectedEmailTemplateKey,
+          templateTitle: tmpl?.title || selectedEmailTemplateKey,
+          sentBy: currentUser.name,
+          remarketingEnabled,
+          remarketingIntervalDays: remarketingDays,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEmailSendResult({ success: true });
+        await fetchEmailLogs(emailProposal.id);
+        fetchProposals();
+      } else {
+        setEmailSendResult({ error: json.error || "Erro desconhecido" });
+      }
+    } catch (e: unknown) {
+      setEmailSendResult({ error: e instanceof Error ? e.message : "Falha de conexão" });
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Helper: get last email log for a proposal
+  const getLastLogForProposal = (proposalId: string) => {
+    // We track this via fetched proposals; use a simple memo approach
+    return null; // logs only loaded per-modal; badge uses DB queries on open
+  };
+  void getLastLogForProposal;
 
   const handlePreview = (p: Proposal) => window.open(`/proposta?code=${p.access_code}`, "_blank");
 
@@ -1025,6 +1175,17 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       )}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleOpenEmailModal(p)}
+                            title={p.client_email ? `Enviar email para ${p.client_email}` : "Sem email cadastrado"}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              p.client_email
+                                ? "hover:bg-blue-500/10 text-blue-400 hover:text-blue-300"
+                                : "text-muted-foreground/30 cursor-not-allowed"
+                            }`}
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
                           <button onClick={() => handleEdit(p)} title="Editar" className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -1044,6 +1205,272 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
           </div>
         )}
       </div>
+
+      {/* ── Email Send Modal ─────────────────────────────────────────────── */}
+      {showEmailModal && emailProposal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) { setShowEmailModal(false); } }}
+        >
+          <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10">
+                  <Send className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="font-heading text-xl font-bold text-foreground">Enviar E-mail</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Para: <span className="text-blue-400 font-semibold">{emailProposal.client_email}</span>
+                    {emailProposal.client_company && (
+                      <span className="ml-2 text-foreground/60">— {emailProposal.client_company}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowEmailHistory(!showEmailHistory)}
+                  title="Histórico de envios"
+                  className={`p-2 rounded-lg transition-colors ${
+                    showEmailHistory
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-secondary/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <History className="w-5 h-5" />
+                  {emailLogs.length > 0 && (
+                    <span className="sr-only">{emailLogs.length} envios</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowEmailModal(false)}
+                  className="p-2 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content scrollable */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Email History Panel */}
+              {showEmailHistory && (
+                <div className="p-4 border-b border-border/50 bg-secondary/10">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <History className="w-3.5 h-3.5" /> Histórico de Envios
+                  </p>
+                  {emailLogsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="animate-spin text-primary w-5 h-5" />
+                    </div>
+                  ) : emailLogs.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">Nenhum email enviado ainda para esta proposta.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {emailLogs.map(log => {
+                        const sentAgo = Math.floor((Date.now() - new Date(log.sent_at).getTime()) / 3600000);
+                        const sentAgoText = sentAgo < 24
+                          ? `${sentAgo}h atrás`
+                          : `${Math.floor(sentAgo / 24)}d atrás`;
+                        return (
+                          <div key={log.id} className="flex items-start gap-3 p-3 bg-card/40 rounded-xl border border-border/40">
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex-shrink-0 ${
+                              log.replied_at ? "bg-green-500/10" : "bg-blue-500/10"
+                            }`}>
+                              {log.replied_at
+                                ? <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                                : <Mail className="w-3.5 h-3.5 text-blue-400" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">{log.template_title}</p>
+                              <p className="text-xs text-muted-foreground truncate">{log.subject}</p>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-[10px] text-muted-foreground">{sentAgoText}</span>
+                                {log.replied_at && (
+                                  <span className="text-[10px] text-green-400 font-semibold">✓ Respondido</span>
+                                )}
+                                {log.remarketing_enabled && !log.replied_at && log.next_followup_at && (
+                                  <span className="text-[10px] text-yellow-400 flex items-center gap-1">
+                                    <RefreshCw className="w-2.5 h-2.5" />
+                                    Follow-up em {Math.ceil((new Date(log.next_followup_at).getTime() - Date.now()) / 86400000)}d
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground flex-shrink-0">{log.sent_by}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Compose Form */}
+              <div className="p-6 space-y-5">
+                {/* Template Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Script de E-mail</label>
+                  <select
+                    value={selectedEmailTemplateKey}
+                    onChange={e => handleEmailTemplateChange(e.target.value)}
+                    className="w-full h-11 bg-secondary/50 border border-border rounded-xl px-4 text-sm text-foreground outline-none focus:border-blue-500/50 transition-all font-medium"
+                  >
+                    <option value="">Selecione um script...</option>
+                    {emailTemplates.map(t => {
+                      const log = emailLogs.find(l => l.template_key === t.key);
+                      const sentAgo = log
+                        ? Math.floor((Date.now() - new Date(log.sent_at).getTime()) / 3600000)
+                        : null;
+                      const onCooldown = sentAgo !== null && sentAgo < 24;
+                      return (
+                        <option key={t.id} value={t.key} disabled={onCooldown}>
+                          {t.title}{onCooldown ? ` (⏳ cooldown — enviado há ${sentAgo}h)` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {selectedEmailTemplateKey && (
+                  <>
+                    {/* Cooldown Warning */}
+                    {(() => {
+                      const log = emailLogs.find(l => l.template_key === selectedEmailTemplateKey);
+                      const sentAgo = log ? Math.floor((Date.now() - new Date(log.sent_at).getTime()) / 3600000) : null;
+                      if (sentAgo !== null && sentAgo < 24) {
+                        return (
+                          <div className="flex items-start gap-3 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                            <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-yellow-300">
+                              Este script foi enviado há <strong>{sentAgo}h</strong>. Aguarde as 24h de cooldown para reenviar o mesmo script.
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Subject */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assunto</label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={e => setEmailSubject(e.target.value)}
+                        placeholder="Assunto do email..."
+                        className="w-full h-10 bg-secondary/30 border border-border rounded-xl px-4 text-sm text-foreground outline-none focus:border-blue-500/50 transition-all"
+                      />
+                    </div>
+
+                    {/* Body */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Corpo do E-mail</label>
+                        <span className="text-[10px] text-muted-foreground">Editável antes de enviar</span>
+                      </div>
+                      <textarea
+                        value={emailBody}
+                        onChange={e => setEmailBody(e.target.value)}
+                        rows={10}
+                        className="w-full bg-card/60 rounded-xl border border-border p-4 text-sm leading-relaxed text-foreground outline-none focus:border-blue-500/50 resize-none transition-all"
+                        placeholder="Corpo do email aparecerá aqui após selecionar um script..."
+                      />
+                    </div>
+
+                    {/* Remarketing Toggle */}
+                    <div className="p-4 rounded-xl bg-secondary/20 border border-border/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-semibold text-foreground">Remarketing Automático</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRemarketingEnabled(!remarketingEnabled)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            remarketingEnabled ? "bg-blue-500" : "bg-secondary"
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                            remarketingEnabled ? "translate-x-6" : "translate-x-1"
+                          }`} />
+                        </button>
+                      </div>
+                      {remarketingEnabled && (
+                        <div className="flex items-center gap-3">
+                          <p className="text-xs text-muted-foreground">Reenviar follow-up a cada</p>
+                          <select
+                            value={remarketingDays}
+                            onChange={e => setRemarketingDays(Number(e.target.value))}
+                            className="bg-secondary/60 border border-border rounded-lg px-3 py-1.5 text-xs font-semibold text-foreground outline-none"
+                          >
+                            {[2, 3, 5, 7, 14, 21, 30].map(d => (
+                              <option key={d} value={d}>{d} dias</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-muted-foreground">se não houver resposta</p>
+                        </div>
+                      )}
+                      {remarketingEnabled && (
+                        <p className="text-[11px] text-muted-foreground/60">
+                          O sistema enviará automaticamente o próximo script da sequência caso o cliente não responda.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Send Result */}
+                {emailSendResult?.success && (
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-green-300">Email enviado com sucesso!</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Enviado para {emailProposal.client_email}</p>
+                    </div>
+                  </div>
+                )}
+                {emailSendResult?.error && (
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/30">
+                    <XCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive">{emailSendResult.error}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-border flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Mail className="w-3.5 h-3.5" />
+                <span>De: lucas@acqent.solutions</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowEmailModal(false)}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSendEmail}
+                  disabled={emailSending || !selectedEmailTemplateKey || !emailSubject || !emailBody}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {emailSending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                  ) : (
+                    <><Send className="w-4 h-4" /> Enviar E-mail</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Create Modal ── */}
       {showModal && (
