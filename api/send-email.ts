@@ -77,8 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${emailBody.replace(/\n/g, "<br />")}
         </div>
         <div style="background-color: #f9fafb; padding: 24px; text-align: center; font-size: 12px; color: #666666; border-top: 1px solid #eaeaea;">
-          <p style="margin: 0;">Enviado por <strong>${sentBy}</strong> da ACQ Enterprise Solutions</p>
-          <p style="margin: 8px 0 0 0;">Não responda a este email se ele não for destinado a você.</p>
+          <p style="margin: 0;">Sent by <strong>Lucas Santos</strong> from ACQ Enterprise Solutions</p>
         </div>
       </div>
     `;
