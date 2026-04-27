@@ -40,8 +40,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error("Configurações de SMTP ou banco de dados ausentes no servidor.");
     }
 
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://ycibjtbrqmpatrmfsyye.supabase.co";
+
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL!,
+      SUPABASE_URL,
       SUPABASE_SERVICE_KEY
     );
 
