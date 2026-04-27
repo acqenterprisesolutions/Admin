@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const SMTP_PORT = parseInt(process.env.SMTP_PORT || "465", 10);
     const SMTP_USER = process.env.SMTP_USER;
     const SMTP_PASS = process.env.SMTP_PASS;
-    const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "ACQ Soluções";
+    const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "ACQ Enterprise Solutions";
     const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SUPABASE_SERVICE_KEY) {
@@ -71,13 +71,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #eaeaea; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #050505; padding: 24px; text-align: center; border-bottom: 2px solid #00FF9D;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: -0.5px;">ACQ <span style="color: #00FF9D;">Soluções</span></h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: -0.5px;">ACQ <span style="color: #00FF9D;">Enterprise Solutions</span></h1>
         </div>
         <div style="padding: 32px; color: #333333; line-height: 1.6; font-size: 16px;">
           ${emailBody.replace(/\n/g, "<br />")}
         </div>
         <div style="background-color: #f9fafb; padding: 24px; text-align: center; font-size: 12px; color: #666666; border-top: 1px solid #eaeaea;">
-          <p style="margin: 0;">Enviado por <strong>${sentBy}</strong> da ACQ Soluções</p>
+          <p style="margin: 0;">Enviado por <strong>${sentBy}</strong> da ACQ Enterprise Solutions</p>
           <p style="margin: 8px 0 0 0;">Não responda a este email se ele não for destinado a você.</p>
         </div>
       </div>
@@ -98,6 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const info = await transp.sendMail({
       from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
       to,
+      bcc: SMTP_USER, // Para salvar uma cópia na caixa da Hostinger (SMTP não salva por padrão)
       subject: finalSubject,
       html: htmlContent,
       text: emailBody, // fallback
