@@ -1,3 +1,4 @@
+import {
   Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon,
   Database, ChevronRight, Circle
 } from "lucide-react";
