@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const info = await transp.sendMail({
-      from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
+      from: `"Lucas | ACQ Enterprise Solutions" <${SMTP_USER}>`,
       to,
       bcc: SMTP_USER, // Para salvar uma cópia na caixa da Hostinger (SMTP não salva por padrão)
       subject: finalSubject,
