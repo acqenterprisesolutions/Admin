@@ -1947,7 +1947,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       {/* Modal Prompt Master Config */}
       {showPromptConfig && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-[#0A0A0A] border border-border w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-card border border-border w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-border flex justify-between items-center bg-secondary/10">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -2078,7 +2078,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       {/* ── Lead Selection Drawer ──────────────────────────────────────────── */}
       {showLeadDrawer && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-          <div className="bg-[#0A0A0A] border border-border w-full sm:max-w-3xl max-h-[92vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in duration-200">
+          <div className="bg-card border border-border w-full sm:max-w-3xl max-h-[92vh] sm:rounded-2xl rounded-t-2xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in duration-200">
             {/* Header */}
             <div className="p-5 border-b border-border flex justify-between items-center flex-shrink-0 bg-secondary/5">
               <div>
