@@ -1,10 +1,14 @@
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon,
-  Database, ChevronRight, Circle
+  Database, ChevronRight, Circle, X, Loader2, Plus, Eye, Clock, CheckCircle, XCircle,
+  AlertCircle, ChevronDown, Star, Phone, MapPin, Globe, FileText, Users, Trash2,
+  RotateCcw, Download, ExternalLink, Bell, Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
+import * as XLSX from "xlsx";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Status = "pending" | "approved" | "revision_requested" | "expired";
