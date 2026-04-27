@@ -82,9 +82,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       </div>
     `;
 
-    // 3. Inject Proposal ID in Subject for IMAP Tracking
-    const shortId = proposalId.split("-")[0].toUpperCase();
-    const finalSubject = `${subject} [ACQ-${shortId}]`;
+    // 3. Subject is mapped exactly as requested by user input
+    const finalSubject = subject;
 
     // 4. Send Email
     const transp = nodemailer.createTransport({
