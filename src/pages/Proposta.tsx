@@ -198,10 +198,21 @@ const Proposta = () => {
             {(() => {
               const content = proposal?.html_content as string || "";
               const isUrl = /^(https?:\/\/)/i.test(content.trim());
+              let decodedHtml = content;
+
+              if (!isUrl && content) {
+                try {
+                  decodedHtml = decodeURIComponent(atob(content.trim()));
+                } catch (e) {
+                  // Fallback if it's raw HTML instead of base64
+                  decodedHtml = content;
+                }
+              }
+
               return (
                 <iframe
                   src={isUrl ? content.trim() : undefined}
-                  srcDoc={isUrl ? undefined : content}
+                  srcDoc={isUrl ? undefined : decodedHtml}
                   title="Proposal Demo"
                   className="w-full h-full min-h-[85vh] rounded-2xl bg-white border-0"
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

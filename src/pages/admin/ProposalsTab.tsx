@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Palette, Zap, Edit3, Sparkles, Search, Settings2, Save, Camera, Upload, Image as ImageIcon,
   Database, ChevronRight, Circle, X, Loader2, Plus, Eye, Clock, CheckCircle, XCircle,
-  AlertCircle, ChevronDown, Star, Phone, MapPin, Globe, FileText, Users, Trash2,
+  AlertCircle, AlertTriangle, ChevronDown, Star, Phone, MapPin, Globe, FileText, Users, Trash2,
   RotateCcw, Download, ExternalLink, Bell, Filter,
   TrendingUp, Check, Copy, Mail, User, Shuffle, Send, History, RefreshCw, Calendar
 } from "lucide-react";
@@ -105,6 +105,26 @@ interface Proposal {
   foto_5: string | null;
   notas_parceiro: string | null;
   preset_key: string | null;
+  gallery: { url: string; location: string }[] | null;
+  effect_key: string | null;
+  effect_intensity: string | null;
+  prompt_cache: string | null;
+  prompt_char_count: number | null;
+}
+
+interface EffectTemplate {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  compatible_presets: string[] | null;
+  conflicts_with: string[] | null;
+  body_subtle: string | null;
+  body_standard: string | null;
+  body_full: string | null;
+  preview_url: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 type NewProposalForm = {
@@ -156,6 +176,11 @@ type NewProposalForm = {
   foto_5: string;
   notas_parceiro: string;
   preset_key: string;
+  gallery: { url: string; location: string }[];
+  effect_key: string | null;
+  effect_intensity: string;
+  prompt_cache: string;
+  prompt_char_count: number;
 };
 
 interface AdminUser {
@@ -237,6 +262,9 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const [dirtyTemplates, setDirtyTemplates] = useState<Record<string, boolean>>({});
   const [activeConfigTab, setActiveConfigTab] = useState("other");
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [effectTemplates, setEffectTemplates] = useState<EffectTemplate[]>([]);
+  const [activeEffectTab, setActiveEffectTab] = useState<string>("");
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
@@ -267,6 +295,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     review_3_nome: "", review_3_nota: 5, review_3_texto: "",
     logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
     notas_parceiro: "", preset_key: "other",
+    gallery: [],
+    effect_key: null,
+    effect_intensity: "standard",
+    prompt_cache: "",
+    prompt_char_count: 0,
   });
 
   // Row actions
@@ -390,10 +423,12 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
 
     const val = parseFloat(form.proposal_value);
 
+    const b64Html = form.html_content ? btoa(encodeURIComponent(form.html_content)) : "";
+
     const payload = {
       client_name:    form.client_name,
       access_code:    form.access_code.toUpperCase(),
-      html_content:   form.html_content,
+      html_content:   b64Html,
       expires_at:     expires_at.toISOString(),
       created_by:     currentUser.name,
       client_email:   form.client_email || null,
@@ -440,6 +475,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       foto_5:         form.foto_5 || null,
       notas_parceiro: form.notas_parceiro || null,
       preset_key:     form.preset_key || "other",
+      gallery:        form.gallery || [],
+      effect_key:     form.effect_key || null,
+      effect_intensity: form.effect_intensity || "standard",
+      prompt_cache:   lovablePrompt,
+      prompt_char_count: lovablePrompt.length,
     };
 
     const { data: inserted, error } = editingId
@@ -563,8 +603,19 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     }
   };
 
+  const fetchEffectTemplates = async () => {
+    const { data } = await supabase.from("effect_templates").select("*");
+    if (data) {
+      setEffectTemplates(data);
+      if (data.length > 0 && !activeEffectTab) {
+        setActiveEffectTab(data[0].key);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchTemplates();
+    fetchEffectTemplates();
   }, []);
 
   const saveTemplate = async (key: string) => {
@@ -587,6 +638,29 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     }
   };
 
+  const saveEffectTemplate = async (key: string) => {
+    setSavingTemplate(true);
+    try {
+      const effect = effectTemplates.find(e => e.key === key);
+      if (!effect) return;
+      const { error } = await supabase
+        .from("effect_templates")
+        .update({
+          body_subtle: effect.body_subtle,
+          body_standard: effect.body_standard,
+          body_full: effect.body_full
+        })
+        .eq("key", key);
+
+      if (error) throw error;
+      alert("Efeito salvo com sucesso!");
+    } catch (err: any) {
+      alert("Erro ao salvar efeito: " + err.message);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) return;
     
@@ -597,7 +671,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     
     const tmpl = promptTemplates[targetKey] || promptTemplates["lovable_prompt"] || "";
     
-    const filled = tmpl
+    let filled = tmpl
       .replaceAll("{NOME}", form.client_company || form.client_name || "[NOME]")
       .replaceAll("{TIPO}", form.business_type || "[TIPO]")
       .replaceAll("{CIDADE}", form.city || "[CIDADE]")
@@ -638,16 +712,50 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       .replaceAll("{REVIEW_3_NOTA}", form.review_3_nota.toString())
       .replaceAll("{REVIEW_3_TEXTO}", form.review_3_texto || "none")
       .replaceAll("{LOGO_URL}", form.logo_url || "none")
-      .replaceAll("{FOTO_1}", form.foto_1 || "none")
-      .replaceAll("{FOTO_2}", form.foto_2 || "none")
-      .replaceAll("{FOTO_3}", form.foto_3 || "none")
-      .replaceAll("{FOTO_4}", form.foto_4 || "none")
-      .replaceAll("{FOTO_5}", form.foto_5 || "none")
       .replaceAll("{NOTAS}", form.notas_parceiro || "none")
       .replaceAll("{ADMIN_NAME}", currentUser.name);
+
+    // Backwards compatibility for old photo placeholders
+    for (let i = 1; i <= 5; i++) {
+      const photoUrl = form.gallery && form.gallery[i-1] ? form.gallery[i-1].url : "none";
+      filled = filled.replaceAll(`{FOTO_${i}}`, photoUrl);
+    }
+
+    // Dynamic Gallery Block
+    let galleryBlock = "\n\n### GALERIA DE IMAGENS ADICIONAIS\nUtilize as imagens reais do cliente abaixo na interface (dentro de containers estilizados ou cards apropriados):\n";
+    if (form.gallery && form.gallery.length > 0) {
+      form.gallery.forEach((item, idx) => {
+        galleryBlock += `- Imagem ${idx + 1}: ${item.url} (Local sugerido no layout: ${item.location})\n`;
+      });
+    } else {
+      galleryBlock += "- Nenhuma imagem adicional fornecida. Use placeholders/ilustrações se necessário.\n";
+    }
+
+    // Visual Effect Block
+    let effectBlock = "";
+    if (form.effect_key) {
+      const selectedEffect = effectTemplates.find(e => e.key === form.effect_key);
+      if (selectedEffect) {
+        effectBlock = `\n\n### EFEITO VISUAL OBRIGATÓRIO: ${selectedEffect.label}\n`;
+        let intensityText = "";
+        if (form.effect_intensity === "subtle") {
+          intensityText = selectedEffect.body_subtle || "";
+        } else if (form.effect_intensity === "full") {
+          intensityText = selectedEffect.body_full || "";
+        } else {
+          intensityText = selectedEffect.body_standard || "";
+        }
+        effectBlock += `Aplique obrigatoriamente a seguinte implementação técnica CSS/JS para este efeito:\n${intensityText}\n`;
+      }
+    }
     
-    setLovablePrompt(filled);
-  }, [form, promptTemplates, currentUser.name]);
+    const finalPrompt = filled + galleryBlock + effectBlock;
+    setLovablePrompt(finalPrompt);
+    
+    // Update prompt cache/char count in the form indirectly?
+    // We don't want to trigger form updates inside useEffect dependent on form, it will loop.
+    // We only update the prompt_char_count when saving.
+  }, [form, promptTemplates, effectTemplates, currentUser.name]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleCopyCode = (code: string) => {
@@ -775,7 +883,14 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     setForm({
       client_name: p.client_name,
       access_code: p.access_code,
-      html_content: p.html_content || "",
+      html_content: (() => {
+        if (!p.html_content) return "";
+        try {
+          return decodeURIComponent(atob(p.html_content));
+        } catch {
+          return p.html_content;
+        }
+      })(),
       expires_days: 8, // Non-critical for edit
       client_email: p.client_email || "",
       client_company: p.client_company || "",
@@ -821,6 +936,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       foto_5: p.foto_5 || "",
       notas_parceiro: p.notas_parceiro || "",
       preset_key: p.preset_key || "other",
+      gallery: p.gallery || [],
+      effect_key: p.effect_key || null,
+      effect_intensity: p.effect_intensity || "standard",
+      prompt_cache: p.prompt_cache || "",
+      prompt_char_count: p.prompt_char_count || 0,
     });
     setShowModal(true);
     setCreateError(null);
@@ -1776,47 +1896,228 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     </div>
                   </div>
 
-                  {/* Photos Upload Grid */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase">Fotos do Negócio (Até 5 fotos - JPG/PNG, max 5MB cada)</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                      {[1, 2, 3, 4, 5].map(i => {
-                        const url = (form as any)[`foto_${i}`];
-                        return (
-                          <div key={i} className="space-y-1.5">
-                            <div className="relative aspect-square bg-secondary/15 border border-dashed border-border rounded-lg overflow-hidden group">
-                              {url ? (
-                                <>
-                                  <img src={url} alt={`Photo ${i}`} className="w-full h-full object-cover" />
-                                  <button
-                                    type="button"
-                                    onClick={() => setForm(f => ({ ...f, [`foto_${i}`]: "" }))}
-                                    className="absolute top-1 right-1 p-1 bg-destructive/80 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </>
+                  {/* Dynamic Gallery Upload Grid */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">Fotos do Negócio (Galeria Dinâmica - Max 10 fotos)</label>
+                      <Button 
+                        type="button" 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => {
+                          if (form.gallery.length >= 10) {
+                            alert("Máximo de 10 fotos atingido.");
+                            return;
+                          }
+                          setForm(f => ({ ...f, gallery: [...f.gallery, { url: "", location: "Galeria" }] }));
+                        }}
+                        className="h-7 text-[10px] border-primary/30 hover:bg-primary/10 text-primary"
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> Adicionar Foto
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {form.gallery.map((img, idx) => (
+                        <div key={idx} className="flex items-center gap-3 p-3 bg-secondary/15 border border-border rounded-xl relative group">
+                          <div className="w-16 h-16 bg-secondary/30 rounded-lg overflow-hidden border border-border relative flex-shrink-0 flex items-center justify-center">
+                            {img.url ? (
+                              <img src={img.url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <ImageIcon className="w-6 h-6 text-muted-foreground/50" />
+                            )}
+                            
+                            <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer text-white text-[9px]">
+                              {uploadingPhotos ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-secondary/50 transition-colors">
-                                  {uploadingPhotos ? (
-                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                                  ) : (
-                                    <>
-                                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                                      <span className="text-[8px] text-muted-foreground mt-1">Foto {i}</span>
-                                    </>
-                                  )}
-                                  <input type="file" accept="image/jpeg,image/png" onChange={(e) => handlePhotoUpload(e, i)} className="hidden" />
-                                </label>
+                                <>
+                                  <Upload className="w-4 h-4 mb-0.5" />
+                                  Alterar
+                                </>
                               )}
-                            </div>
-                            <p className="text-[9px] text-center text-muted-foreground">{i === 1 ? "Destaque (Hero)" : i === 2 ? "Sobre" : "Galeria"}</p>
+                              <input 
+                                type="file" 
+                                accept="image/jpeg,image/png" 
+                                onChange={async (e) => {
+                                  if (!e.target.files || e.target.files.length === 0) return;
+                                  setUploadingPhotos(true);
+                                  try {
+                                    const file = e.target.files[0];
+                                    const fileExt = file.name.split('.').pop();
+                                    const filePath = `${Math.random()}.${fileExt}`;
+                                    
+                                    const { data, error } = await supabase.storage
+                                      .from('proposal-media')
+                                      .upload(filePath, file);
+
+                                    if (error) throw error;
+
+                                    const { data: { publicUrl } } = supabase.storage
+                                      .from('proposal-media')
+                                      .getPublicUrl(filePath);
+
+                                    setForm(f => {
+                                      const newGallery = [...f.gallery];
+                                      newGallery[idx] = { ...newGallery[idx], url: publicUrl };
+                                      return { ...f, gallery: newGallery };
+                                    });
+                                  } catch (err: any) {
+                                    alert(`Erro no upload: ${err.message}`);
+                                  } finally {
+                                    setUploadingPhotos(false);
+                                  }
+                                }} 
+                                className="hidden" 
+                              />
+                            </label>
                           </div>
-                        );
-                      })}
+
+                          <div className="flex-1 space-y-1.5">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Onde a imagem deve ficar?</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: Fundo do cabeçalho, Produto, Rodapé..." 
+                              value={img.location}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setForm(f => {
+                                  const newGallery = [...f.gallery];
+                                  newGallery[idx] = { ...newGallery[idx], location: val };
+                                  return { ...f, gallery: newGallery };
+                                });
+                              }}
+                              className="w-full h-8 bg-secondary/30 border border-border rounded-md px-2 text-xs text-foreground focus:ring-1 focus:ring-primary/50 outline-none"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(f => ({ ...f, gallery: f.gallery.filter((_, i) => i !== idx) }));
+                            }}
+                            className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {form.gallery.length === 0 && (
+                      <div className="text-center py-6 border border-dashed border-border/50 rounded-xl text-muted-foreground text-xs flex flex-col items-center gap-2 bg-secondary/5">
+                        <ImageIcon className="w-5 h-5 opacity-50" />
+                        <span>Nenhuma imagem adicionada ainda.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ✨ Visual Effects Section */}
+              <div className="space-y-4 pt-4 border-t border-border/30">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
+                  <Palette className="w-4 h-4" /> 4. Efeitos Visuais
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Estilo de Efeito</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, effect_key: "" }))}
+                        className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                          form.effect_key === "" 
+                            ? "bg-primary/10 border-primary text-primary" 
+                            : "bg-secondary/15 border-border text-muted-foreground hover:border-primary/30"
+                        }`}
+                      >
+                        <span className="text-xs font-bold">Sem Efeito</span>
+                        <span className="text-[9px] opacity-70">Design padrão da página</span>
+                      </button>
+
+                      {(() => {
+                        const filtered = effectTemplates.filter(e => {
+                          if (e.key === "starfield") return true; // Generic
+                          if (!e.compatible_presets || e.compatible_presets.length === 0) return true;
+                          return e.compatible_presets.includes(form.preset_key);
+                        });
+
+                        // Fallback selection logic
+                        if (form.effect_key && form.effect_key !== "" && !filtered.some(e => e.key === form.effect_key)) {
+                          setTimeout(() => setForm(f => ({ ...f, effect_key: filtered.some(e => e.key === "starfield") ? "starfield" : "" })), 0);
+                        }
+
+                        return filtered.map(effect => (
+                          <button
+                            key={effect.id}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, effect_key: effect.key }))}
+                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all relative group ${
+                              form.effect_key === effect.key 
+                                ? "bg-primary/10 border-primary text-primary" 
+                                : "bg-secondary/15 border-border text-muted-foreground hover:border-primary/30"
+                            }`}
+                          >
+                            <span className="text-xs font-bold">{effect.label}</span>
+                            <span className="text-[9px] opacity-70 truncate">{effect.description || "Efeito visual dinâmico"}</span>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Intensidade do Efeito</label>
+                    <div className="flex flex-col gap-2 bg-secondary/15 border border-border p-3 rounded-xl">
+                      {[
+                        { value: "subtle", label: "🟢 Sutil", desc: "Toque minimalista" },
+                        { value: "standard", label: "🟡 Padrão", desc: "Equilíbrio ideal" },
+                        { value: "full", label: "🔴 Intenso", desc: "Imersão total" }
+                      ].map(opt => (
+                        <label 
+                          key={opt.value} 
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                            form.effect_intensity === opt.value 
+                              ? "bg-secondary/30 text-foreground" 
+                              : "text-muted-foreground hover:bg-secondary/10"
+                          }`}
+                        >
+                          <input 
+                            type="radio" 
+                            name="intensity" 
+                            value={opt.value} 
+                            checked={form.effect_intensity === opt.value}
+                            onChange={() => setForm(f => ({ ...f, effect_intensity: opt.value as any }))}
+                            className="accent-primary"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium">{opt.label}</span>
+                            <span className="text-[9px] opacity-70">{opt.desc}</span>
+                          </div>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 </div>
+
+                {(() => {
+                  const selectedEffect = effectTemplates.find(e => e.key === form.effect_key);
+                  if (!selectedEffect) return null;
+
+                  const conflicts = selectedEffect.conflicts_with || [];
+                  if (conflicts.length === 0) return null;
+
+                  return (
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs text-red-300">
+                        <strong>Atenção:</strong> Este efeito entra em conflito com: {conflicts.join(", ")}.
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Proposal & Technical */}
@@ -1872,12 +2173,34 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                         type="button" 
                         size="sm" 
                         variant="ghost"
-                        onClick={() => {
+                        onClick={async () => {
                           navigator.clipboard.writeText(lovablePrompt);
+                          setCopiedPrompt(true);
+                          setTimeout(() => setCopiedPrompt(false), 2000);
+                          
+                          if (editingId) {
+                            await supabase
+                              .from("proposals")
+                              .update({
+                                prompt_cache: lovablePrompt,
+                                prompt_char_count: lovablePrompt.length
+                              })
+                              .eq("id", editingId);
+                          }
                         }}
-                        className="h-7 text-[10px] text-primary hover:bg-primary/10"
+                        className="h-7 text-[10px] text-primary hover:bg-primary/10 flex items-center gap-1"
                       >
-                        <Copy className="w-3 h-3 mr-1" /> Copiar Prompt
+                        {copiedPrompt ? (
+                          <>
+                            <Check className="w-3 h-3 text-green-400" />
+                            <span className="text-green-400">Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copiar Prompt</span>
+                          </>
+                        )}
                       </Button>
                     </div>
                     <textarea
@@ -1885,7 +2208,22 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       value={lovablePrompt}
                       className="w-full bg-primary/5 border border-primary/20 rounded-lg p-3 text-[10px] text-primary font-mono resize-none h-32 leading-relaxed"
                     />
-                    <p className="text-[10px] text-muted-foreground italic">Copie este prompt detalhado para gerar sua Landing Page no Lovable.</p>
+                    <div className="flex justify-between items-center mt-1 text-[10px]">
+                      <p className="text-muted-foreground italic">Copie este prompt detalhado para gerar sua Landing Page no Lovable.</p>
+                      {(() => {
+                        const chars = lovablePrompt.length;
+                        const tokens = Math.ceil(chars / 3.8);
+                        let colorClass = "text-green-400";
+                        if (chars > 12000) colorClass = "text-red-400";
+                        else if (chars > 6000) colorClass = "text-yellow-400 font-semibold";
+                        
+                        return (
+                          <span className={`${colorClass} font-mono`}>
+                            {chars} chars · ~{tokens} tokens
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   <div className="space-y-2 sm:col-span-2 pt-4 border-t border-border/30">
@@ -1970,15 +2308,16 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                   { id: "personal_care", label: "Personal" },
                   { id: "professional", label: "Professional" },
                   { id: "food_beverage", label: "Food & Bev" },
-                  { id: "other", label: "Other (Generic)" }
+                  { id: "other", label: "Other (Generic)" },
+                  { id: "effects", label: "✦ Efeitos Visuais" }
                 ].map(tab => {
                   const fullKey = `prompt_${tab.id}`;
-                  const isDirty = dirtyTemplates[fullKey];
+                  const isDirty = tab.id === "effects" ? false : dirtyTemplates[fullKey];
                   return (
                     <button
                       key={tab.id}
                       onClick={() => {
-                        if (Object.values(dirtyTemplates).some(v => v)) {
+                        if (tab.id !== "effects" && Object.values(dirtyTemplates).some(v => v)) {
                           if (activeConfigTab !== tab.id && !confirm("Você tem alterações não salvas nesta aba. Deseja mudar assim mesmo?")) {
                             return;
                           }
@@ -1998,63 +2337,195 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                 })}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div className="flex justify-between items-end mb-1">
-                  <div>
-                    <label className="text-[11px] font-bold text-primary uppercase tracking-tighter">Corpo do Prompt (Instruções)</label>
-                    <p className="text-[10px] text-muted-foreground">O modelo abaixo será preenchido com as variáveis do formulário.</p>
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground bg-secondary/20 px-2 py-1 rounded">
-                    Key: prompt_{activeConfigTab}
-                  </div>
-                </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
+                {activeConfigTab === "effects" ? (
+                  <div className="flex flex-1 gap-6 min-h-0 overflow-hidden">
+                    {/* Left column: Effect list */}
+                    <div className="w-64 bg-secondary/10 border border-border rounded-xl p-3 flex flex-col gap-1 overflow-y-auto">
+                      <label className="text-[10px] font-bold text-primary uppercase tracking-wider px-2 mb-2">Efeitos Disponíveis</label>
+                      {effectTemplates.map(e => (
+                        <button
+                          key={e.id}
+                          onClick={() => setActiveEffectTab(e.key)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex flex-col gap-0.5 ${
+                            activeEffectTab === e.key 
+                              ? "bg-primary/20 border border-primary/30 text-primary" 
+                              : "hover:bg-white/5 text-muted-foreground"
+                          }`}
+                        >
+                          <span>{e.label}</span>
+                          <span className="text-[9px] opacity-60 truncate">{e.description || "Sem descrição"}</span>
+                        </button>
+                      ))}
+                    </div>
 
-                <textarea
-                  value={editingTemplates[`prompt_${activeConfigTab}`] || ""}
-                  onChange={e => {
-                    const val = e.target.value;
-                    const key = `prompt_${activeConfigTab}`;
-                    setEditingTemplates(prev => ({ ...prev, [key]: val }));
-                    setDirtyTemplates(prev => ({ ...prev, [key]: val !== promptTemplates[key] }));
-                  }}
-                  className="w-full h-[350px] bg-secondary/15 border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed"
-                  placeholder="Instruções para o Claude/GPT..."
-                />
+                    {/* Right column: Intensity editors */}
+                    <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
+                      {(() => {
+                        const effect = effectTemplates.find(e => e.key === activeEffectTab);
+                        if (!effect) return <div className="text-center text-muted-foreground text-xs py-10">Nenhum efeito selecionado.</div>;
+                        
+                        return (
+                          <>
+                            <div className="flex justify-between items-center bg-secondary/20 p-3 rounded-xl border border-border/50">
+                              <div>
+                                <h3 className="text-sm font-bold text-foreground">{effect.label}</h3>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">Edite o bloco de código CSS/JS injetado no prompt.</p>
+                              </div>
+                              {effect.compatible_presets && effect.compatible_presets.length > 0 && (
+                                <div className="flex items-center gap-1 text-[9px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-1 rounded">
+                                  <Sparkles className="w-3 h-3" /> Compatível
+                                </div>
+                              )}
+                            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-border/30">
-                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
-                    <h4 className="text-[10px] font-bold text-primary uppercase mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3" /> Dica de Variáveis
-                    </h4>
-                    <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Use tags como <code className="text-primary">{`{NOME}`}</code>, <code className="text-primary">{`{TOM}`}</code>, <code className="text-primary">{`{REVIEW_1_TEXTO}`}</code>, <code className="text-primary">{`{LOGO_URL}`}</code> e <code className="text-primary">{`{FOTO_1}`}</code>. 
-                      Há um total de 37 variáveis disponíveis.
-                    </p>
+                            {/* Conflict Alerts */}
+                            {effect.conflicts_with && effect.conflicts_with.length > 0 && (
+                              <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                                <div className="text-xs text-red-300">
+                                  <strong>Atenção:</strong> Este efeito entra em conflito técnico com: {effect.conflicts_with.join(", ")}. Evite usá-los juntos.
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="space-y-3 flex-1">
+                              <div className="space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">🟢 Nível Sutil (Subtle)</label>
+                                  {(() => {
+                                    const chars = (effect.body_subtle || "").length;
+                                    const tokens = Math.ceil(chars / 3.8);
+                                    let colorClass = "text-green-400";
+                                    if (chars > 5000) colorClass = "text-red-400";
+                                    else if (chars > 2500) colorClass = "text-yellow-400 font-semibold";
+                                    return <span className={`text-[9px] font-mono ${colorClass}`}>{chars} chars · ~{tokens} tkn</span>;
+                                  })()}
+                                </div>
+                                <textarea
+                                  value={effect.body_subtle || ""}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setEffectTemplates(prev => prev.map(item => item.key === effect.key ? { ...item, body_subtle: val } : item));
+                                  }}
+                                  className="w-full h-[100px] bg-secondary/15 border border-border rounded-xl p-3 text-xs font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed"
+                                  placeholder="CSS/JS para intensidade sutil..."
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">🟡 Nível Padrão (Standard)</label>
+                                  {(() => {
+                                    const chars = (effect.body_standard || "").length;
+                                    const tokens = Math.ceil(chars / 3.8);
+                                    let colorClass = "text-green-400";
+                                    if (chars > 5000) colorClass = "text-red-400";
+                                    else if (chars > 2500) colorClass = "text-yellow-400 font-semibold";
+                                    return <span className={`text-[9px] font-mono ${colorClass}`}>{chars} chars · ~{tokens} tkn</span>;
+                                  })()}
+                                </div>
+                                <textarea
+                                  value={effect.body_standard || ""}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setEffectTemplates(prev => prev.map(item => item.key === effect.key ? { ...item, body_standard: val } : item));
+                                  }}
+                                  className="w-full h-[100px] bg-secondary/15 border border-border rounded-xl p-3 text-xs font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed"
+                                  placeholder="CSS/JS para intensidade padrão..."
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">🔴 Nível Intenso (Full)</label>
+                                  {(() => {
+                                    const chars = (effect.body_full || "").length;
+                                    const tokens = Math.ceil(chars / 3.8);
+                                    let colorClass = "text-green-400";
+                                    if (chars > 5000) colorClass = "text-red-400";
+                                    else if (chars > 2500) colorClass = "text-yellow-400 font-semibold";
+                                    return <span className={`text-[9px] font-mono ${colorClass}`}>{chars} chars · ~{tokens} tkn</span>;
+                                  })()}
+                                </div>
+                                <textarea
+                                  value={effect.body_full || ""}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setEffectTemplates(prev => prev.map(item => item.key === effect.key ? { ...item, body_full: val } : item));
+                                  }}
+                                  className="w-full h-[100px] bg-secondary/15 border border-border rounded-xl p-3 text-xs font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed"
+                                  placeholder="CSS/JS para intensidade máxima..."
+                                />
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                  <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
-                    <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1.5">
-                      <Zap className="w-3 h-3" /> Regra de Tech Stack
-                    </h4>
-                    <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Sempre peça ao modelo para usar **Vanilla HTML/CSS/JS**. 
-                      Não use CDNs de Tailwind ou frameworks externos para garantir portabilidade.
-                    </p>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-end mb-1">
+                      <div>
+                        <label className="text-[11px] font-bold text-primary uppercase tracking-tighter">Corpo do Prompt (Instruções)</label>
+                        <p className="text-[10px] text-muted-foreground">O modelo abaixo será preenchido com as variáveis do formulário.</p>
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground bg-secondary/20 px-2 py-1 rounded">
+                        Key: prompt_{activeConfigTab}
+                      </div>
+                    </div>
+
+                    <textarea
+                      value={editingTemplates[`prompt_${activeConfigTab}`] || ""}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const key = `prompt_${activeConfigTab}`;
+                        setEditingTemplates(prev => ({ ...prev, [key]: val }));
+                        setDirtyTemplates(prev => ({ ...prev, [key]: val !== promptTemplates[key] }));
+                      }}
+                      className="w-full h-[350px] bg-secondary/15 border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed flex-1"
+                      placeholder="Instruções para o Claude/GPT..."
+                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-border/30">
+                      <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+                        <h4 className="text-[10px] font-bold text-primary uppercase mb-2 flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3" /> Dica de Variáveis
+                        </h4>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Use tags como <code className="text-primary">{`{NOME}`}</code>, <code className="text-primary">{`{TOM}`}</code>, <code className="text-primary">{`{REVIEW_1_TEXTO}`}</code> e <code className="text-primary">{`{LOGO_URL}`}</code>. 
+                          As imagens e efeitos serão concatenados automaticamente no final do prompt.
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                        <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1.5">
+                          <Zap className="w-3 h-3" /> Regra de Tech Stack
+                        </h4>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Sempre peça ao modelo para usar **Vanilla HTML/CSS/JS**. 
+                          Não use CDNs de Tailwind ou frameworks externos para garantir portabilidade.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div className="p-6 border-t border-border bg-secondary/10 flex justify-between items-center gap-4">
+              <div className="p-6 border-t border-border bg-secondary/10 flex justify-between items-center gap-4 flex-shrink-0">
                 <p className="text-[11px] text-muted-foreground">
-                  {dirtyTemplates[`prompt_${activeConfigTab}`] 
-                    ? "⚠️ Você possui alterações não salvas nesta aba." 
-                    : "✅ Template sincronizado com o banco de dados."}
+                  {activeConfigTab === "effects" 
+                    ? "✅ Salve para aplicar as mudanças técnicos nos efeitos."
+                    : (dirtyTemplates[`prompt_${activeConfigTab}`] 
+                        ? "⚠️ Você possui alterações não salvas nesta aba." 
+                        : "✅ Template sincronizado com o banco de dados.")}
                 </p>
                 <div className="flex gap-3">
                   <Button variant="ghost" onClick={() => setShowPromptConfig(false)}>Cancelar</Button>
                   <Button 
                     className="bg-primary text-black font-bold h-10 px-8" 
-                    onClick={() => saveTemplate(activeConfigTab)}
-                    disabled={savingTemplate || !dirtyTemplates[`prompt_${activeConfigTab}`]}
+                    onClick={() => activeConfigTab === "effects" ? saveEffectTemplate(activeEffectTab) : saveTemplate(activeConfigTab)}
+                    disabled={savingTemplate || (activeConfigTab !== "effects" && !dirtyTemplates[`prompt_${activeConfigTab}`])}
                   >
                     {savingTemplate ? (
                       <>
@@ -2064,7 +2535,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     ) : (
                       <>
                         <Save className="w-4 h-4 mr-2" />
-                        Salvar Template
+                        Salvar {activeConfigTab === "effects" ? "Efeito" : "Template"}
                       </>
                     )}
                   </Button>
