@@ -607,9 +607,25 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
   const fetchEffectTemplates = async () => {
     const { data } = await supabase.from("effect_templates").select("*");
     if (data) {
-      setEffectTemplates(data);
-      if (data.length > 0 && !activeEffectTab) {
-        setActiveEffectTab(data[0].key);
+      const decodedData = data.map(e => {
+        const decodeSafe = (str: string | null) => {
+          if (!str) return "";
+          try {
+            return decodeURIComponent(atob(str));
+          } catch (err) {
+            return str; // Fallback in case it's not base64 encoded
+          }
+        };
+        return {
+          ...e,
+          body_subtle: decodeSafe(e.body_subtle),
+          body_standard: decodeSafe(e.body_standard),
+          body_full: decodeSafe(e.body_full)
+        };
+      });
+      setEffectTemplates(decodedData);
+      if (decodedData.length > 0 && !activeEffectTab) {
+        setActiveEffectTab(decodedData[0].key);
       }
     }
   };
@@ -644,12 +660,15 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
     try {
       const effect = effectTemplates.find(e => e.key === key);
       if (!effect) return;
+      
+      const encodeSafe = (str: string | null) => str ? btoa(encodeURIComponent(str)) : "";
+      
       const { error } = await supabase
         .from("effect_templates")
         .update({
-          body_subtle: effect.body_subtle,
-          body_standard: effect.body_standard,
-          body_full: effect.body_full
+          body_subtle: encodeSafe(effect.body_subtle),
+          body_standard: encodeSafe(effect.body_standard),
+          body_full: encodeSafe(effect.body_full)
         })
         .eq("key", key);
 
@@ -2041,8 +2060,21 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                       {(() => {
                         const filtered = effectTemplates.filter(e => {
                           if (e.key === "starfield") return true; // Generic
-                          if (!e.compatible_presets || e.compatible_presets.length === 0) return true;
-                          return e.compatible_presets.includes(form.preset_key);
+                          if (!e.compatible_presets) return true;
+                          if (Array.isArray(e.compatible_presets)) {
+                            if (e.compatible_presets.length === 0) return true;
+                            return e.compatible_presets.includes(form.preset_key);
+                          }
+                          if (typeof e.compatible_presets === "string") {
+                            try {
+                              const parsed = JSON.parse(e.compatible_presets);
+                              if (Array.isArray(parsed)) {
+                                if (parsed.length === 0) return true;
+                                return parsed.includes(form.preset_key);
+                              }
+                            } catch (err) {}
+                          }
+                          return true;
                         });
 
                         // Fallback selection logic
@@ -2373,7 +2405,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                                 <h3 className="text-sm font-bold text-foreground">{effect.label}</h3>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">Edite o bloco de código CSS/JS injetado no prompt.</p>
                               </div>
-                              {effect.compatible_presets && effect.compatible_presets.length > 0 && (
+                              {Array.isArray(effect.compatible_presets) && effect.compatible_presets.length > 0 && (
                                 <div className="flex items-center gap-1 text-[9px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-1 rounded">
                                   <Sparkles className="w-3 h-3" /> Compatível
                                 </div>
@@ -2381,7 +2413,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                             </div>
 
                             {/* Conflict Alerts */}
-                            {effect.conflicts_with && effect.conflicts_with.length > 0 && (
+                            {Array.isArray(effect.conflicts_with) && effect.conflicts_with.length > 0 && (
                               <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
                                 <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
                                 <div className="text-xs text-red-300">
@@ -2485,7 +2517,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                         setEditingTemplates(prev => ({ ...prev, [key]: val }));
                         setDirtyTemplates(prev => ({ ...prev, [key]: val !== promptTemplates[key] }));
                       }}
-                      className="w-full h-[350px] bg-secondary/15 border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed flex-1"
+                      className="w-full min-h-[350px] resize-y bg-secondary/15 border border-border rounded-xl p-4 text-sm font-mono text-foreground focus:ring-1 focus:ring-primary/50 outline-none leading-relaxed flex-1"
                       placeholder="Instruções para o Claude/GPT..."
                     />
 
