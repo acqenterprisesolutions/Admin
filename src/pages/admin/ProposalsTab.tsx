@@ -518,6 +518,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
       review_3_nome: "", review_3_nota: 5, review_3_texto: "",
       logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
       notas_parceiro: "", preset_key: "other",
+      gallery: [], effect_key: "", effect_intensity: "standard"
     });
     fetchProposals();
     if (!isMaster) fetchLeadLists();
@@ -1918,7 +1919,7 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {form.gallery.map((img, idx) => (
+                      {(form.gallery || []).map((img, idx) => (
                         <div key={idx} className="flex items-center gap-3 p-3 bg-secondary/15 border border-border rounded-xl relative group">
                           <div className="w-16 h-16 bg-secondary/30 rounded-lg overflow-hidden border border-border relative flex-shrink-0 flex items-center justify-center">
                             {img.url ? (
