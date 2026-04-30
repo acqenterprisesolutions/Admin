@@ -1179,6 +1179,11 @@ export default function ProposalsTab({ currentUser }: { currentUser: AdminUser }
                 review_3_nome: "", review_3_nota: 5, review_3_texto: "",
                 logo_url: "", foto_1: "", foto_2: "", foto_3: "", foto_4: "", foto_5: "",
                 notas_parceiro: "", preset_key: "other",
+                gallery: [],
+                effect_key: null,
+                effect_intensity: "standard",
+                prompt_cache: "",
+                prompt_char_count: 0,
               });
               setShowModal(true); 
               setCreateError(null); 
